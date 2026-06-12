@@ -1,4 +1,6 @@
-# Short-Stay Market Scanner — Development Plan
+# Roomradar — Development Plan
+
+Python package `roomradar`, CLI command `roomradar`, dashboard title "Roomradar".
 
 A tool that, given an area (and optionally dates/guests), scrapes Airbnb listings and hotel
 listings, normalizes the messy scraped payloads into clean structured records via the Claude API,
