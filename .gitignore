@@ -79,3 +79,7 @@ htmlcov/
 # OS artefacts
 .DS_Store
 Thumbs.db
+*.py[cod]
+.venv/
+*.sqlite
+.env
