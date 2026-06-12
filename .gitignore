@@ -27,3 +27,5 @@ build/
 .venv/
 venv/
 env/
+*.db
+.env
