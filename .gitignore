@@ -54,6 +54,11 @@ build/
 __pycache__/
 *.py[cod]
 *.pyo
+# Python bytecode / cache
+__pycache__/
+*.py[cod]
+*.pyc
+*.pyo
 
 # Distribution / packaging
 *.egg-info/
@@ -115,3 +120,12 @@ htmlcov/
 
 # Environment files
 .env
+# Pytest cache
+.pytest_cache/
+
+# Ruff / mypy caches
+.ruff_cache/
+.mypy_cache/
+
+# OS
+.DS_Store
