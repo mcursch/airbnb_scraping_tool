@@ -68,7 +68,13 @@ def _listing_extraction_json(idx: int = 0) -> str:
     )
 
 
-def _make_batch_result(custom_id: str, idx: int = 0, *, error: bool = False) -> MagicMock:
+def _make_batch_result(
+    custom_id: str,
+    idx: int = 0,
+    *,
+    error: bool = False,
+    cache_read_input_tokens: int = 0,
+) -> MagicMock:
     """Build a fake individual batch result object."""
     result_obj = MagicMock()
     result_obj.custom_id = custom_id
@@ -90,7 +96,7 @@ def _make_batch_result(custom_id: str, idx: int = 0, *, error: bool = False) -> 
         message.content = [text_block]
         message.usage.input_tokens = 300
         message.usage.output_tokens = 150
-        message.usage.cache_read_input_tokens = 0
+        message.usage.cache_read_input_tokens = cache_read_input_tokens
 
         result_obj.result.message = message
 
@@ -418,6 +424,56 @@ class TestCliBatchFlag:
 
         # The CLI must pass threshold=0 when --batch is set.
         assert captured_threshold == [0], f"Expected threshold=0, got {captured_threshold}"
+
+
+# ---------------------------------------------------------------------------
+# Test: cache_read_tokens persisted correctly (LIN-153)
+# ---------------------------------------------------------------------------
+
+
+class TestCacheReadTokensPersistence:
+    """Batch path must store the Anthropic SDK cache_read_input_tokens value
+    in ExtractionLog.cache_read_tokens (not silently drop it due to wrong kwarg).
+    """
+
+    def test_nonzero_cache_read_tokens_stored_in_log(self, db_session: Session) -> None:
+        """cache_read_input_tokens from the SDK usage object must be persisted as
+        cache_read_tokens in the ExtractionLog row."""
+        scrapes = _make_raw_scrapes(db_session, 1)
+        scrape_id = scrapes[0].id
+
+        result = _make_batch_result(str(scrape_id), idx=0, cache_read_input_tokens=768)
+        mock_client = MagicMock()
+        fake_batch = MagicMock()
+        fake_batch.id = "msgbatch_cache_test"
+        fake_batch.processing_status = "ended"
+        mock_client.beta.messages.batches.create.return_value = fake_batch
+        mock_client.beta.messages.batches.retrieve.return_value = fake_batch
+        mock_client.beta.messages.batches.results.return_value = iter([result])
+
+        batch_extract(scrapes, db_session, threshold=0, client=mock_client)
+
+        log = db_session.query(ExtractionLog).one()
+        assert log.cache_read_tokens == 768
+
+    def test_zero_cache_read_tokens_stored_in_log(self, db_session: Session) -> None:
+        """When cache_read_input_tokens is 0, cache_read_tokens must also be 0."""
+        scrapes = _make_raw_scrapes(db_session, 1)
+        scrape_id = scrapes[0].id
+
+        result = _make_batch_result(str(scrape_id), idx=0, cache_read_input_tokens=0)
+        mock_client = MagicMock()
+        fake_batch = MagicMock()
+        fake_batch.id = "msgbatch_cache_zero_test"
+        fake_batch.processing_status = "ended"
+        mock_client.beta.messages.batches.create.return_value = fake_batch
+        mock_client.beta.messages.batches.retrieve.return_value = fake_batch
+        mock_client.beta.messages.batches.results.return_value = iter([result])
+
+        batch_extract(scrapes, db_session, threshold=0, client=mock_client)
+
+        log = db_session.query(ExtractionLog).one()
+        assert log.cache_read_tokens == 0
 
 
 # ---------------------------------------------------------------------------
