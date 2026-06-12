@@ -5,7 +5,7 @@ from __future__ import annotations
 import datetime
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class SearchQuery(BaseModel):
@@ -24,4 +24,6 @@ class RawPayload(BaseModel):
     source: str
     url: str
     payload: str  # raw text/JSON content
-    fetched_at: datetime.datetime = datetime.datetime.now(datetime.timezone.utc)
+    fetched_at: datetime.datetime = Field(
+        default_factory=lambda: datetime.datetime.now(datetime.timezone.utc)
+    )
