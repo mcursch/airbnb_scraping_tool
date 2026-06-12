@@ -139,9 +139,11 @@ class BookingScraper(ScrapeProvider):
         self,
         session: Optional[Any] = None,
         *,
+        run_id: Optional[int] = None,
         max_pages: int = 5,
     ) -> None:
         self._session = session
+        self._run_id = run_id
         self._max_pages = max_pages
 
     # ------------------------------------------------------------------
@@ -344,9 +346,10 @@ class BookingScraper(ScrapeProvider):
         if self._session is None:
             return
         try:
-            from db.models import RawScrapeRow  # type: ignore[import-untyped]
+            from db.models import RawScrape as RawScrapeRow  # type: ignore[import-untyped]
 
             row = RawScrapeRow(
+                run_id=self._run_id,
                 source=raw.source,
                 url=raw.url,
                 payload=raw.payload,

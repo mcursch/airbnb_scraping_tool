@@ -279,6 +279,46 @@ class TestSearch:
         assert len(persisted) == 1
         assert persisted[0].source == "booking"
 
+    def test_persist_passes_run_id_to_db_row(
+        self,
+        search_results_html: str,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """_persist() includes run_id when constructing the ORM row."""
+        scraper_with_run = BookingScraper(session=None, run_id=42)
+        assert scraper_with_run._run_id == 42
+
+        # Verify run_id is threaded into the ORM row constructor.
+        added_rows: list[object] = []
+
+        class FakeSession:
+            def add(self, row: object) -> None:
+                added_rows.append(row)
+
+            def flush(self) -> None:
+                pass
+
+        scraper_with_run._session = FakeSession()
+
+        class FakeRawScrapeRow:
+            """Minimal stand-in for db.models.RawScrape."""
+
+            def __init__(self, **kwargs: object) -> None:
+                self.__dict__.update(kwargs)
+                self.id = 99
+
+        # Patch the in-function import so no real DB is needed.
+        import db.models as db_models_mod
+
+        monkeypatch.setattr(db_models_mod, "RawScrape", FakeRawScrapeRow)
+
+        raw = RawScrape(source="booking", url="https://example.com", payload="<html/>")
+        scraper_with_run._persist(raw)
+
+        assert len(added_rows) == 1
+        row = added_rows[0]
+        assert getattr(row, "run_id", "MISSING") == 42
+
     def test_no_network_access_in_all_tests(
         self,
         scraper: BookingScraper,
