@@ -83,3 +83,5 @@ Thumbs.db
 .venv/
 *.sqlite
 .env
+.pytest_cache/
+.venv/
