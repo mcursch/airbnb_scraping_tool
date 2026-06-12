@@ -243,6 +243,35 @@ class TestAirbnbScraperInstantiation:
 
 
 # ---------------------------------------------------------------------------
+# Regression: LIN-145 — scrapers.airbnb must import without error, and
+# scrapers.base must export RawPayload
+# ---------------------------------------------------------------------------
+
+
+class TestImports:
+    """Guard against import regressions in scrapers.airbnb and scrapers.base."""
+
+    def test_scrapers_airbnb_importable(self) -> None:
+        """scrapers.airbnb must be importable without raising ImportError."""
+        import importlib
+
+        mod = importlib.import_module("scrapers.airbnb")
+        assert mod is not None
+
+    def test_scrapers_base_exports_raw_payload(self) -> None:
+        """scrapers.base must export RawPayload (re-export alias added in LIN-144)."""
+        from scrapers.base import RawPayload  # noqa: F401
+
+        assert RawPayload is not None
+
+    def test_airbnb_raw_payload_is_dict(self) -> None:
+        """scrapers.airbnb.RawPayload must be dict (JSON objects from Airbnb API)."""
+        from scrapers import airbnb as _mod
+
+        assert _mod.RawPayload is dict
+
+
+# ---------------------------------------------------------------------------
 # Live integration test (network required — skipped unless AIRBNB_LIVE_TEST=1)
 # ---------------------------------------------------------------------------
 
