@@ -119,12 +119,15 @@ def _call_with_timeout_and_retry(
     """
     last_exc: BaseException | None = None
     for attempt in range(max_retries + 1):
+        pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+        future = pool.submit(fn, *args, **kwargs)
         try:
-            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                future = pool.submit(fn, *args, **kwargs)
-                return future.result(timeout=timeout)
+            return future.result(timeout=timeout)
         except concurrent.futures.TimeoutError as exc:
             last_exc = exc
+            # Don't wait=True — that would block until the thread finishes,
+            # making the timeout completely unenforced.
+            pool.shutdown(wait=False)
             run_logger.warning(
                 "%s timed out after %.1fs (attempt %d/%d)",
                 label,
@@ -134,6 +137,7 @@ def _call_with_timeout_and_retry(
             )
         except Exception as exc:  # noqa: BLE001
             last_exc = exc
+            pool.shutdown(wait=False)
             run_logger.warning(
                 "%s raised %s (attempt %d/%d): %s",
                 label,
@@ -482,7 +486,7 @@ class Pipeline:
             self.repo.log_extraction(
                 session,
                 raw_scrape_id=rs.id,
-                model=self.extractor._model,
+                model=self.extractor.model,
                 input_tokens=0,
                 output_tokens=0,
                 cache_read_tokens=0,
@@ -496,7 +500,7 @@ class Pipeline:
         self.repo.log_extraction(
             session,
             raw_scrape_id=rs.id,
-            model=self.extractor._model,
+            model=self.extractor.model,
             input_tokens=result.input_tokens,
             output_tokens=result.output_tokens,
             cache_read_tokens=result.cache_read_tokens,
