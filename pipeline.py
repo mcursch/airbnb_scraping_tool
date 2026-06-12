@@ -1,14 +1,15 @@
 """Acquire → extract → store pipeline.
 
 This module orchestrates the three main stages of the Short-Stay Market
-Scanner.  The extraction and store stages are stubs pending later tasks;
-the acquire stage (``run_acquire``) is fully wired and handles the
-``BlockedError`` fallback logic described in PLAN.md Stage 2.
+Scanner.  All stages (acquire, extract, store) are fully wired.
 
-Additionally, this module exposes:
-  - ``SessionLocal``  — re-exported from airbnb_scraping_tool.db.models
-  - ``init_db``       — re-exported from airbnb_scraping_tool.db.models
-  - ``Pipeline``      — full acquire→extract→store orchestration class
+Public API:
+  - ``SessionLocal``    — re-exported from airbnb_scraping_tool.db.models
+  - ``init_db``         — re-exported from airbnb_scraping_tool.db.models
+  - ``Pipeline``        — full acquire→extract→store orchestration class
+  - ``PipelineResult``  — result type returned by ``run_search``
+  - ``run_search``      — high-level entry point used by the dashboard
+  - ``run_acquire``     — acquire-only helper (backward compatibility)
   - ``process_raw_scrape`` — content-hash dedup helper (uses flat db.models)
 """
 
@@ -19,9 +20,10 @@ import logging
 import signal
 import sys
 import threading
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any, Callable, Sequence
 
 import config as config_mod
 from scrapers.base import BlockedError, ScrapeProvider, SearchQuery as FlatSearchQuery
@@ -30,6 +32,118 @@ from airbnb_scraping_tool.db.repo import Repo
 from airbnb_scraping_tool.schemas import RawPayload, SearchQuery
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# PipelineResult — result type returned by run_search
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class PipelineResult:
+    """Outcome of a ``run_search`` call.
+
+    Attributes
+    ----------
+    status:
+        ``"done"`` on success, ``"failed"`` on error.
+    run_id:
+        The ``SearchRun.id`` of the completed run, or ``None`` on failure.
+    error:
+        Human-readable error message when ``status == "failed"``, else ``None``.
+    """
+
+    status: str
+    run_id: int | None = None
+    error: str | None = None
+
+
+# ---------------------------------------------------------------------------
+# run_search — high-level entry point used by the dashboard
+# ---------------------------------------------------------------------------
+
+
+def run_search(
+    query: SearchQuery,
+    progress_callback: Callable[[float, str], None] | None = None,
+) -> PipelineResult:
+    """Run the full pipeline for *query* and return a :class:`PipelineResult`.
+
+    This is the high-level entry point used by the Streamlit dashboard and
+    other callers that want a simple fire-and-forget interface.  It
+    constructs scrapers and an extractor from the application configuration,
+    delegates to :class:`Pipeline`, and wraps the outcome in a
+    :class:`PipelineResult`.
+
+    Parameters
+    ----------
+    query:
+        Search parameters (area, sources, guests, dates).
+    progress_callback:
+        Optional ``(fraction: float, message: str) -> None`` callable invoked
+        at key milestones so callers can show a progress bar.  ``fraction``
+        is in ``[0.0, 1.0]``.
+
+    Returns
+    -------
+    PipelineResult
+        ``status="done"`` with the ``run_id`` on success; ``status="failed"``
+        with an ``error`` string on any exception.
+    """
+
+    def _progress(fraction: float, message: str) -> None:
+        if progress_callback is not None:
+            try:
+                progress_callback(fraction, message)
+            except Exception:  # noqa: BLE001
+                pass
+
+    _progress(0.05, "Building scrapers…")
+
+    # Build scrapers lazily so missing optional dependencies don't crash the
+    # import; each scraper is silently skipped when its package is absent.
+    scrapers: list[Any] = []
+    sources = list(query.sources) if query.sources else ["airbnb"]
+    if "airbnb" in sources:
+        try:
+            from airbnb_scraping_tool.scrapers.airbnb import AirbnbScraper  # type: ignore[import]
+            scrapers.append(AirbnbScraper())
+        except (ImportError, Exception):  # noqa: BLE001
+            logger.warning("Airbnb scraper not available; skipping.")
+
+    if "booking" in sources or "hotels" in sources:
+        try:
+            from airbnb_scraping_tool.scrapers.booking import BookingScraper  # type: ignore[import]
+            scrapers.append(BookingScraper())
+        except (ImportError, Exception):  # noqa: BLE001
+            logger.warning("Booking.com scraper not available; skipping.")
+
+    _progress(0.10, "Building extractor…")
+
+    try:
+        from airbnb_scraping_tool.extraction.extractor import Extractor
+        import anthropic
+
+        client = anthropic.Anthropic(
+            api_key=config_mod.settings.anthropic_api_key,
+            max_retries=3,
+        )
+        extractor = Extractor(client=client)
+    except Exception as exc:  # noqa: BLE001
+        return PipelineResult(status="failed", error=f"Failed to build extractor: {exc}")
+
+    _progress(0.15, "Starting pipeline…")
+
+    pipeline = Pipeline(scrapers=scrapers, extractor=extractor)
+
+    try:
+        run_id = pipeline.run(query)
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Pipeline raised an unexpected exception")
+        return PipelineResult(status="failed", error=str(exc))
+
+    _progress(1.0, "Done.")
+    return PipelineResult(status="done", run_id=run_id)
 
 
 # ---------------------------------------------------------------------------
