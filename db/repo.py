@@ -1,5 +1,6 @@
 """Database engine factory and table creation helpers."""
 
+from sqlalchemy import event
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 
@@ -11,18 +12,28 @@ def get_engine(database_url: str | None = None) -> Engine:
 
     If *database_url* is not provided, it is read from the application config
     (which reads DATABASE_URL from the environment / .env file).
+
+    For SQLite databases, foreign-key constraints and WAL journal mode are
+    enabled on every new connection via an event listener.
     """
     if database_url is None:
         from config import settings
 
         database_url = settings.database_url
 
-    connect_args: dict = {}
     if database_url.startswith("sqlite"):
-        # Enable WAL mode and enforce foreign-key constraints for SQLite
-        connect_args = {"check_same_thread": False}
+        engine = create_engine(
+            database_url, connect_args={"check_same_thread": False}
+        )
 
-    return create_engine(database_url, connect_args=connect_args)
+        @event.listens_for(engine, "connect")
+        def set_sqlite_pragma(conn, _):
+            conn.execute("PRAGMA foreign_keys=ON")
+            conn.execute("PRAGMA journal_mode=WAL")
+
+        return engine
+
+    return create_engine(database_url)
 
 
 def create_all(engine: Engine | None = None) -> None:

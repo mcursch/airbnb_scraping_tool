@@ -4,6 +4,7 @@ from datetime import datetime
 
 from sqlalchemy import (
     JSON,
+    Boolean,
     DateTime,
     Float,
     ForeignKey,
@@ -125,7 +126,7 @@ class ListingSnapshot(Base):
     currency: Mapped[str | None] = mapped_column(String, nullable=True)
     total_price: Mapped[float | None] = mapped_column(Float, nullable=True)
     fees: Mapped[dict | None] = mapped_column(JSON, nullable=True)
-    availability: Mapped[bool | None] = mapped_column(Integer, nullable=True)
+    availability: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     captured_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, server_default=func.now()
     )

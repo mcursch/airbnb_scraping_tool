@@ -134,3 +134,35 @@ def test_db_content_hash_unique(db_engine):
             session.add(RawScrape(source="airbnb", url="https://a.co/2",
                                    content_hash="deadbeef", status="pending"))
             session.commit()
+
+
+# ---------------------------------------------------------------------------
+# Foreign-key enforcement
+# ---------------------------------------------------------------------------
+
+def test_db_raw_scrape_fk_enforced(db_engine):
+    """Inserting a RawScrape with a non-existent run_id must raise IntegrityError."""
+    from sqlalchemy.exc import IntegrityError
+
+    with pytest.raises(IntegrityError):
+        with Session(db_engine) as session:
+            session.add(RawScrape(
+                source="airbnb",
+                url="https://a.co/fk-test",
+                run_id=99999,  # no SearchRun with this id
+                status="pending",
+            ))
+            session.commit()
+
+
+def test_db_extraction_log_fk_enforced(db_engine):
+    """Inserting an ExtractionLog with a non-existent raw_scrape_id must raise IntegrityError."""
+    from sqlalchemy.exc import IntegrityError
+
+    with pytest.raises(IntegrityError):
+        with Session(db_engine) as session:
+            session.add(ExtractionLog(
+                raw_scrape_id=99999,  # no RawScrape with this id
+                status="success",
+            ))
+            session.commit()
