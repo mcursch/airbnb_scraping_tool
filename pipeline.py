@@ -4,23 +4,44 @@ This module orchestrates the three main stages of the Short-Stay Market
 Scanner.  The extraction and store stages are stubs pending later tasks;
 the acquire stage (``run_acquire``) is fully wired and handles the
 ``BlockedError`` fallback logic described in PLAN.md Stage 2.
+
+Additionally, this module exposes:
+  - ``SessionLocal``  — re-exported from airbnb_scraping_tool.db.models
+  - ``init_db``       — re-exported from airbnb_scraping_tool.db.models
+  - ``Pipeline``      — full acquire→extract→store orchestration class
+  - ``process_raw_scrape`` — content-hash dedup helper (uses flat db.models)
 """
 
 from __future__ import annotations
 
+import json
 import logging
-from typing import Sequence
+import signal
+import sys
+import threading
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Sequence
 
-from scrapers.base import BlockedError, RawScrape, ScrapeProvider, SearchQuery
+import config as config_mod
+from scrapers.base import BlockedError, ScrapeProvider, SearchQuery as FlatSearchQuery
+from airbnb_scraping_tool.db.models import SessionLocal, init_db  # noqa: F401 — re-exported
+from airbnb_scraping_tool.db.repo import Repo
+from airbnb_scraping_tool.schemas import RawPayload, SearchQuery
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# run_acquire — kept for backward compatibility with test_pipeline_fallback.py
+# ---------------------------------------------------------------------------
 
 
 def run_acquire(
     query: str,
     providers: Sequence[ScrapeProvider],
     fallback_provider: ScrapeProvider | None = None,
-) -> list[RawScrape]:
+) -> list:
     """Run the acquire stage for *query* across every provider in *providers*.
 
     For each provider the method calls ``provider.search(SearchQuery(area=query))``
@@ -51,8 +72,8 @@ def run_acquire(
         Flat list of :class:`~scrapers.base.RawScrape` objects collected from
         all providers (and the fallback where used).
     """
-    search_query = SearchQuery(area=query)
-    results: list[RawScrape] = []
+    search_query = FlatSearchQuery(area=query)
+    results: list = []
 
     for provider in providers:
         provider_name = type(provider).__name__
@@ -101,3 +122,419 @@ def run_acquire(
                 )
 
     return results
+
+
+# ---------------------------------------------------------------------------
+# process_raw_scrape — content-hash dedup helper (uses flat db.models)
+# ---------------------------------------------------------------------------
+
+
+def process_raw_scrape(session: Any, raw_scrape: Any, extractor: Any) -> Any:
+    """Process a single RawScrape with content-hash deduplication.
+
+    Uses the *flat* ``db.models`` ORM classes (not ``airbnb_scraping_tool.db.models``).
+    The caller is responsible for flushing/committing the session.
+
+    Algorithm:
+        1. Look for an existing ExtractionLog (status='extracted') linked to any
+           RawScrape with the same ``content_hash``.
+        2. **Dedup path**: create a zero-cost ExtractionLog with status='dedup'
+           pointing at the same listing, plus a new ListingSnapshot for this run.
+        3. **New path**: call ``extractor.extract(raw_scrape)``, upsert the
+           returned listing, create a ListingSnapshot and an ExtractionLog.
+
+    Returns:
+        The ExtractionLog instance for this scrape (flushed, not committed).
+    """
+    from db.models import ExtractionLog, Listing, ListingSnapshot, RawScrape as DBRawScrape
+
+    # ------------------------------------------------------------------
+    # Check for existing extraction with the same content_hash (dedup)
+    # ------------------------------------------------------------------
+    existing_log: Any = (
+        session.query(ExtractionLog)
+        .join(DBRawScrape, ExtractionLog.raw_scrape_id == DBRawScrape.id)
+        .filter(DBRawScrape.content_hash == raw_scrape.content_hash)
+        .filter(ExtractionLog.status == "extracted")
+        .first()
+    )
+
+    if existing_log is not None:
+        # Dedup: zero-cost log pointing at the same listing
+        dedup_log = ExtractionLog(
+            raw_scrape_id=raw_scrape.id,
+            listing_id=existing_log.listing_id,
+            model=None,
+            input_tokens=0,
+            output_tokens=0,
+            cache_read_tokens=0,
+            status="dedup",
+        )
+        session.add(dedup_log)
+        session.flush()
+
+        # Still insert a ListingSnapshot so every run has its own row
+        if existing_log.listing_id is not None:
+            snap = ListingSnapshot(
+                listing_id=existing_log.listing_id,
+                run_id=raw_scrape.run_id,
+            )
+            session.add(snap)
+            session.flush()
+
+        return dedup_log
+
+    # ------------------------------------------------------------------
+    # New content hash: call the extractor
+    # ------------------------------------------------------------------
+    result = extractor.extract(raw_scrape)
+
+    # Upsert the Listing from listing_data
+    ld: dict[str, Any] = result.listing_data
+    source = ld.get("source", raw_scrape.source)
+    source_listing_id = ld.get("source_listing_id")
+    name = ld.get("name")
+
+    listing = None
+    if source_listing_id:
+        existing_listing = (
+            session.query(Listing)
+            .filter_by(source=source, source_listing_id=source_listing_id)
+            .first()
+        )
+        if existing_listing is None:
+            listing = Listing(
+                source=source,
+                source_listing_id=source_listing_id,
+                name=name,
+                url=ld.get("url"),
+            )
+            session.add(listing)
+        else:
+            listing = existing_listing
+            if name:
+                listing.name = name
+        session.flush()
+
+    listing_id = listing.id if listing is not None else None
+
+    # Create ExtractionLog
+    log = ExtractionLog(
+        raw_scrape_id=raw_scrape.id,
+        listing_id=listing_id,
+        model=result.model,
+        input_tokens=result.input_tokens,
+        output_tokens=result.output_tokens,
+        cache_read_tokens=result.cache_read_tokens,
+        status="extracted",
+    )
+    session.add(log)
+    session.flush()
+
+    # Create ListingSnapshot for this run
+    if listing_id is not None:
+        snap = ListingSnapshot(
+            listing_id=listing_id,
+            run_id=raw_scrape.run_id,
+        )
+        session.add(snap)
+        session.flush()
+
+    return log
+
+
+# ---------------------------------------------------------------------------
+# Pipeline class — uses airbnb_scraping_tool.db.models
+# ---------------------------------------------------------------------------
+
+
+class Pipeline:
+    """End-to-end scan pipeline: acquire → extract → store.
+
+    Parameters
+    ----------
+    scrapers:
+        Sequence of scraper objects whose ``search(query)`` method returns
+        a list of ``RawPayload`` objects.
+    extractor:
+        Extraction object whose ``extract(source, url, payload)`` method
+        returns an ``ExtractionResult``.
+    repo:
+        Optional ``Repo`` instance.  Defaults to a fresh ``Repo()``.
+    session_factory:
+        Optional ``sessionmaker``-like callable.  When omitted the pipeline
+        reads the module-level ``SessionLocal`` at call time so that tests
+        can monkey-patch it.
+    """
+
+    def __init__(
+        self,
+        scrapers: Sequence[Any],
+        extractor: Any,
+        repo: Repo | None = None,
+        session_factory: Any | None = None,
+    ) -> None:
+        self._scrapers = scrapers
+        self._extractor = extractor
+        self._repo = repo if repo is not None else Repo()
+        self._session_factory = session_factory
+        self._cancel_flag = threading.Event()
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _get_session(self) -> Any:
+        """Return a new session from the configured factory."""
+        pipeline_mod = sys.modules[__name__]
+        factory = self._session_factory or pipeline_mod.SessionLocal
+        return factory()
+
+    @staticmethod
+    def _write_log(log_file: Any, level: str, msg: str, **extra: Any) -> None:
+        """Append a JSON-lines log entry to *log_file*."""
+        entry: dict[str, Any] = {
+            "ts": datetime.now(timezone.utc).isoformat(),
+            "level": level,
+            "msg": msg,
+        }
+        entry.update(extra)
+        log_file.write(json.dumps(entry) + "\n")
+        log_file.flush()
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
+    def run(
+        self,
+        query: SearchQuery,
+        *,
+        dry_run: bool = False,
+        no_extract: bool = False,
+    ) -> int | None:
+        """Execute the full pipeline for *query*.
+
+        Parameters
+        ----------
+        query:
+            Search parameters (area, sources, guests, dates).
+        dry_run:
+            When ``True``, collect payloads but write nothing to the database.
+            Returns ``None`` and creates a ``dry-<timestamp>.jsonl`` log file.
+        no_extract:
+            When ``True``, persist RawScrape rows with ``status='pending'``
+            but skip LLM extraction and produce no ListingSnapshot rows.
+
+        Returns
+        -------
+        int | None
+            The ``SearchRun.id`` of the completed run, or ``None`` for dry runs.
+        """
+        pipeline_mod = sys.modules[__name__]
+        pipeline_mod.init_db()
+
+        log_dir = Path(config_mod.settings.log_dir)
+        log_dir.mkdir(parents=True, exist_ok=True)
+
+        # ------------------------------------------------------------------
+        # Dry-run path — no DB writes
+        # ------------------------------------------------------------------
+        if dry_run:
+            ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%f")
+            log_path = log_dir / f"dry-{ts}.jsonl"
+            with open(log_path, "w", encoding="utf-8") as lf:
+                self._write_log(lf, "INFO", "Dry run started", area=query.area)
+                for scraper in self._scrapers:
+                    payloads: list[RawPayload] = scraper.search(query)
+                    for p in payloads:
+                        self._write_log(lf, "DEBUG", "Would process payload", url=p.url)
+                self._write_log(lf, "INFO", "Dry run complete")
+            return None
+
+        # ------------------------------------------------------------------
+        # Normal run — acquire → (extract) → store
+        # ------------------------------------------------------------------
+        from airbnb_scraping_tool.db.models import (
+            RawScrape as AirbnbRawScrape,
+        )
+
+        self._cancel_flag.clear()
+
+        # Install a SIGINT handler that sets the cancel flag instead of raising.
+        # Restore the original handler when we're done.
+        orig_handler = signal.getsignal(signal.SIGINT)
+
+        def _sigint_handler(sig: int, frame: Any) -> None:  # noqa: ANN001
+            self._cancel_flag.set()
+
+        try:
+            signal.signal(signal.SIGINT, _sigint_handler)
+        except (ValueError, OSError):
+            # Not the main thread; skip signal handling.
+            pass
+
+        sess = self._get_session()
+        run_id: int | None = None
+        cancelled = False
+
+        try:
+            # Open a SearchRun
+            run = self._repo.open_run(
+                sess,
+                area_query=query.area,
+                sources=list(query.sources),
+                guests=query.guests,
+                checkin=str(query.checkin) if query.checkin else None,
+                checkout=str(query.checkout) if query.checkout else None,
+            )
+            sess.flush()
+            run_id = run.id
+
+            log_path = log_dir / f"{run_id}.jsonl"
+
+            stats: dict[str, Any] = {
+                "total_listings": 0,
+                "new": 0,
+                "updated": 0,
+                "dedup_hits": 0,
+                "total_tokens": 0,
+                "estimated_cost_usd": 0.0,
+            }
+
+            seen_hashes: set[str] = set()
+
+            with open(log_path, "w", encoding="utf-8") as lf:
+                self._write_log(lf, "INFO", "Run started", run_id=run_id, area=query.area)
+
+                # Collect payloads from all scrapers
+                all_payloads: list[RawPayload] = []
+                for scraper in self._scrapers:
+                    try:
+                        all_payloads.extend(scraper.search(query))
+                    except Exception as exc:
+                        self._write_log(lf, "ERROR", "Scraper failed", scraper=type(scraper).__name__, error=str(exc))
+
+                for payload in all_payloads:
+                    # Check cancel flag at the start of each iteration
+                    if self._cancel_flag.is_set():
+                        cancelled = True
+                        break
+
+                    content_hash = payload.content_hash
+
+                    # Intra-run dedup via Python set
+                    if content_hash in seen_hashes:
+                        stats["dedup_hits"] += 1
+                        self._write_log(lf, "DEBUG", "Dedup hit (intra-run)", url=payload.url)
+                        continue
+
+                    seen_hashes.add(content_hash)
+
+                    # Persist the raw scrape
+                    raw_scrape = AirbnbRawScrape(
+                        run_id=run_id,
+                        source=payload.source,
+                        url=payload.url,
+                        payload=payload.payload,
+                        content_hash=content_hash,
+                        status="pending",
+                    )
+                    sess.add(raw_scrape)
+                    sess.flush()
+
+                    if no_extract:
+                        continue
+
+                    # LLM extraction
+                    result = self._extractor.extract(payload.source, payload.url, payload.payload)
+
+                    if result.listing is None:
+                        self._write_log(
+                            lf, "WARNING", "Extraction failed",
+                            url=payload.url, error=result.error,
+                        )
+                        continue
+
+                    listing_ex = result.listing
+
+                    # Upsert the normalised Listing
+                    listing, is_new, was_updated = self._repo.upsert_listing(
+                        sess,
+                        source=payload.source,
+                        source_listing_id=listing_ex.source_listing_id,
+                        name=listing_ex.name,
+                        url=listing_ex.url,
+                        property_type=listing_ex.property_type,
+                        lat=listing_ex.lat,
+                        lon=listing_ex.lon,
+                        address_text=listing_ex.address_text,
+                        bedrooms=listing_ex.bedrooms,
+                        beds=listing_ex.beds,
+                        baths=listing_ex.baths,
+                        max_guests=listing_ex.max_guests,
+                        rating=listing_ex.rating,
+                        review_count=listing_ex.review_count,
+                        amenities=listing_ex.amenities,
+                        images=listing_ex.images,
+                        host_or_brand=listing_ex.host_or_brand,
+                    )
+
+                    # Insert price/availability snapshot
+                    self._repo.insert_snapshot(
+                        sess,
+                        listing_id=listing.id,
+                        run_id=run_id,
+                        nightly_price=listing_ex.nightly_price,
+                        currency=listing_ex.currency,
+                        total_price=listing_ex.total_price,
+                        fees=listing_ex.fees if listing_ex.fees else None,
+                        availability=listing_ex.availability,
+                    )
+
+                    raw_scrape.status = "extracted"
+                    sess.flush()
+
+                    # Accumulate stats
+                    tokens = result.total_tokens
+                    stats["total_tokens"] += tokens
+                    stats["estimated_cost_usd"] += result.estimated_cost_usd
+                    stats["total_listings"] += 1
+                    if is_new:
+                        stats["new"] += 1
+                    elif was_updated:
+                        stats["updated"] += 1
+
+                    self._write_log(
+                        lf, "INFO", "Listing extracted",
+                        url=payload.url, is_new=is_new, was_updated=was_updated, tokens=tokens,
+                    )
+
+                # Close the run
+                final_status = "cancelled" if cancelled else "done"
+                self._repo.record_run_stats(sess, run_id, stats)
+                self._repo.close_run(sess, run_id, status=final_status)
+                sess.commit()
+
+                self._write_log(
+                    lf, "INFO", "Run complete",
+                    run_id=run_id, status=final_status, **stats,
+                )
+
+            return run_id
+
+        except Exception:
+            try:
+                sess.rollback()
+            except Exception:
+                pass
+            raise
+        finally:
+            try:
+                sess.close()
+            except Exception:
+                pass
+            try:
+                signal.signal(signal.SIGINT, orig_handler)
+            except (ValueError, OSError, UnboundLocalError):
+                pass

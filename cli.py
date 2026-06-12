@@ -90,6 +90,7 @@ def _cmd_scan(args: types.SimpleNamespace) -> None:
 )
 @click.option("--no-extract", is_flag=True, default=False, help="Acquire only; skip LLM extraction")
 @click.option("--batch", is_flag=True, default=False, help="Force Message Batches API for extraction")
+@click.option("--dry-run", is_flag=True, default=False, help="Collect payloads but write nothing to the database")
 def scan(
     area: str,
     checkin: str | None,
@@ -98,12 +99,27 @@ def scan(
     sources: str,
     no_extract: bool,
     batch: bool,
+    dry_run: bool,
 ) -> None:
     """Run a full market scan for AREA.
 
     Example:
         python cli.py scan "Lisbon, Portugal" --checkin 2025-08-01 --checkout 2025-08-07 --guests 2
     """
+    if dry_run:
+        from airbnb_scraping_tool.extraction.extractor import Extractor
+        from airbnb_scraping_tool.schemas import SearchQuery
+        from pipeline import Pipeline
+
+        sources_list = [s.strip() for s in sources.split(",") if s.strip() in ("airbnb", "booking")]
+        scrapers = _build_scrapers(sources_list)
+        extractor = Extractor(client=None)
+        query = SearchQuery(area=area, sources=sources_list or ["airbnb"])  # type: ignore[arg-type]
+        pipeline = Pipeline(scrapers=scrapers, extractor=extractor)
+        pipeline.run(query, dry_run=True)
+        click.echo("Dry run complete")
+        return
+
     args = types.SimpleNamespace(
         area=area,
         checkin=checkin,

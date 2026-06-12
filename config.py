@@ -29,6 +29,9 @@ class Settings(BaseSettings):
     rate_limit_max_seconds: float = 3.0
     scraper_api_key: str = ""
 
+    # Logging
+    log_dir: str = "logs"
+
     # Extraction
     batch_threshold: int = 10  # use Batches API above this many scrapes
 
