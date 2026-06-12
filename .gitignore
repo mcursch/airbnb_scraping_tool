@@ -35,6 +35,12 @@ __pycache__/
 *$py.class
 *.pyc
 
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+*.egg
+
 # Virtual environments
 .venv/
 venv/
@@ -57,3 +63,19 @@ htmlcov/
 # IDE
 .idea/
 .vscode/
+# Environment / secrets
+.env
+
+# uv
+.uv/
+
+# Test / lint caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# OS artefacts
+.DS_Store
+Thumbs.db
