@@ -34,6 +34,16 @@ __pycache__/
 *.py[cod]
 *$py.class
 *.pyc
+*.py[cod]
+*.pyo
+
+# SQLite databases
+*.db
+*.sqlite3
+
+# Environment files
+.env
+.env.*
 
 # Distribution / packaging
 dist/
