@@ -398,9 +398,23 @@ def get_listings_for_run(run_id: int, engine: Engine) -> Any:  # returns pd.Data
     return pd.DataFrame(rows)
 
 
-def list_search_runs(limit: int = 50) -> list[dict[str, Any]]:
-    """Return recent :class:`SearchRun` rows as plain dicts, newest first."""
-    engine = get_engine()
+def list_search_runs(limit: int = 50, engine: Engine | None = None) -> list[dict[str, Any]]:
+    """Return recent :class:`SearchRun` rows as plain dicts, newest first.
+
+    Each dict contains all scalar fields on :class:`SearchRun` so callers do
+    not need to access the ORM model directly.
+
+    Parameters
+    ----------
+    limit:
+        Maximum number of rows to return (default 50).
+    engine:
+        SQLAlchemy engine to use.  Defaults to the engine from
+        :func:`get_engine` (i.e. the application-configured database).
+        Pass an explicit engine in tests to use an in-memory database.
+    """
+    if engine is None:
+        engine = get_engine()
     Session = sessionmaker(bind=engine)
     with Session() as session:
         runs = (
@@ -413,7 +427,12 @@ def list_search_runs(limit: int = 50) -> list[dict[str, Any]]:
             {
                 "id": r.id,
                 "area_query": r.area_query,
+                "checkin": r.checkin,
+                "checkout": r.checkout,
+                "guests": r.guests,
+                "sources": r.sources,
                 "started_at": r.started_at,
+                "finished_at": r.finished_at,
                 "status": r.status,
                 "stats": r.stats or {},
             }

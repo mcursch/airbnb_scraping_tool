@@ -17,6 +17,7 @@ from db.repo import (
     close_search_run,
     create_listing_snapshot,
     create_search_run,
+    list_search_runs,
     record_run_stats,
     upsert_listing,
 )
@@ -299,3 +300,85 @@ class TestCloseSearchRun:
         close_search_run(session, run)
         session.commit()
         assert run.stats == {}
+
+
+# ---------------------------------------------------------------------------
+# list_search_runs
+# ---------------------------------------------------------------------------
+
+
+class TestListSearchRuns:
+    """Tests for the list_search_runs module-level function."""
+
+    def test_returns_all_scalar_fields(self, engine):
+        """Every dict must contain the fields consumed by dashboard/pages/history.py."""
+        required_keys = {
+            "id", "area_query", "checkin", "checkout", "guests", "sources",
+            "started_at", "finished_at", "status", "stats",
+        }
+        with Session(engine) as sess:
+            create_search_run(
+                sess,
+                "Lisbon, Portugal",
+                checkin="2024-07-01",
+                checkout="2024-07-07",
+                guests=2,
+                sources=["airbnb"],
+            )
+            sess.commit()
+
+        results = list_search_runs(engine=engine)
+        assert len(results) == 1
+        assert required_keys <= set(results[0].keys()), (
+            f"Missing keys: {required_keys - set(results[0].keys())}"
+        )
+
+    def test_returns_correct_field_values(self, engine):
+        """Spot-check that checkin, checkout, guests, sources, finished_at are populated."""
+        with Session(engine) as sess:
+            run = create_search_run(
+                sess,
+                "Madrid, Spain",
+                checkin="2024-08-01",
+                checkout="2024-08-05",
+                guests=3,
+                sources=["booking"],
+            )
+            record_run_stats(sess, run, stats={"listing_count": 7})
+            sess.commit()
+
+        results = list_search_runs(engine=engine)
+        row = results[0]
+        assert row["area_query"] == "Madrid, Spain"
+        assert row["checkin"] == "2024-08-01"
+        assert row["checkout"] == "2024-08-05"
+        assert row["guests"] == 3
+        assert row["finished_at"] is not None
+
+    def test_ordered_newest_first(self, engine):
+        """Runs must be returned newest first (by started_at)."""
+        ts_old = datetime(2024, 1, 1, 0, 0, 0)
+        ts_new = datetime(2024, 6, 1, 0, 0, 0)
+        with Session(engine) as sess:
+            run_old = SearchRun(area_query="Rome", started_at=ts_old, status="completed")
+            run_new = SearchRun(area_query="Milan", started_at=ts_new, status="completed")
+            sess.add_all([run_old, run_new])
+            sess.commit()
+
+        results = list_search_runs(engine=engine)
+        assert results[0]["area_query"] == "Milan"
+        assert results[1]["area_query"] == "Rome"
+
+    def test_limit_is_respected(self, engine):
+        """Only *limit* rows must be returned even when more exist."""
+        with Session(engine) as sess:
+            for i in range(5):
+                sess.add(SearchRun(area_query=f"City {i}", status="done"))
+            sess.commit()
+
+        results = list_search_runs(limit=3, engine=engine)
+        assert len(results) == 3
+
+    def test_empty_database_returns_empty_list(self, engine):
+        results = list_search_runs(engine=engine)
+        assert results == []
