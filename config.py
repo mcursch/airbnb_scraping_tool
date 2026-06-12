@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -60,6 +60,16 @@ class Settings(BaseSettings):
         ),
     )
     extraction_model: str = Field(
-        default="claude-opus-4-8",
+        default="claude-opus-4-5",
         description="Anthropic model used for structured extraction.",
     )
+
+    @model_validator(mode="after")
+    def _check_delay_range(self) -> "Settings":
+        if self.scraper_request_delay_max < self.scraper_request_delay_min:
+            raise ValueError(
+                "scraper_request_delay_max must be >= scraper_request_delay_min "
+                f"(got min={self.scraper_request_delay_min}, "
+                f"max={self.scraper_request_delay_max})"
+            )
+        return self
