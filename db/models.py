@@ -133,3 +133,8 @@ class ExtractionLog(Base):
     cache_read_tokens = Column(Integer)
     status = Column(String)
     error = Column(Text)
+
+    @property
+    def cache_read_input_tokens(self) -> int | None:
+        """Alias for ``cache_read_tokens`` matching the Anthropic SDK field name."""
+        return self.cache_read_tokens

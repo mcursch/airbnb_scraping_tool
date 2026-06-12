@@ -205,7 +205,7 @@ def _batch_extract_via_api(
                     model=MODEL,
                     input_tokens=getattr(usage, "input_tokens", None) if usage else None,
                     output_tokens=getattr(usage, "output_tokens", None) if usage else None,
-                    cache_read_input_tokens=(
+                    cache_read_tokens=(
                         getattr(usage, "cache_read_input_tokens", None) if usage else None
                     ),
                     status="success",

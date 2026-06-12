@@ -1,14 +1,162 @@
-"""Extractor interface and result type.
+"""Extractor interface, result type, and synchronous extraction entry-point.
 
-The concrete implementation (calling claude-opus-4-8 via the Anthropic SDK) is
-added in Stage 3.  This module defines the protocol that pipeline.py depends on
-so that the dedup logic and tests can operate against a typed interface.
+``SYSTEM_PROMPT``, ``_get_default_client``, and ``extract_listings`` provide
+the concrete implementation (calling claude-opus-4-8 via the Anthropic SDK).
+The ``ExtractionResult`` dataclass and ``Extractor`` Protocol are kept for
+backwards compatibility with pipeline.py.
 """
 
-from dataclasses import dataclass, field
+from __future__ import annotations
+
+import anthropic
+from dataclasses import dataclass
 from typing import Protocol
 
-from db.models import RawScrape
+from sqlalchemy.orm import Session
+
+from config import settings
+from db.models import ExtractionLog, RawScrape
+from extraction.pretrim import pretrim
+from schemas.listing import ListingExtraction
+
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+
+MODEL = "claude-opus-4-8"
+
+SYSTEM_PROMPT = """\
+You are a structured data extraction assistant for a short-stay accommodation scanner.
+Given raw scraped content from a listing page, extract the listing details into the
+provided JSON schema.  Be precise; use null for any field you cannot determine.
+Extract only what is present in the content — do not invent values.
+"""
+
+# ---------------------------------------------------------------------------
+# Default client factory
+# ---------------------------------------------------------------------------
+
+
+def _get_default_client() -> anthropic.Anthropic:
+    """Return an Anthropic client configured from application settings."""
+    return anthropic.Anthropic(api_key=settings.anthropic_api_key, max_retries=3)
+
+
+# ---------------------------------------------------------------------------
+# Synchronous extraction entry-point
+# ---------------------------------------------------------------------------
+
+
+def extract_listings(
+    raw_scrapes: list[RawScrape],
+    session: Session,
+    *,
+    client: anthropic.Anthropic | None = None,
+) -> list[ListingExtraction]:
+    """Extract structured listings from a list of raw scrapes.
+
+    For each ``RawScrape``:
+
+    * Empty / blank / ``None`` payloads are marked ``status='failed'`` and a
+      failed ``ExtractionLog`` row is written; the record is skipped.
+    * Valid payloads are pre-trimmed then sent to the LLM.  On success the
+      scrape is marked ``'extracted'`` and a success log is written.
+    * Any exception from the API is caught per-record; a failed log is written
+      and processing continues with the next record.
+
+    ``session.flush()`` is called after each record; a single
+    ``session.commit()`` is issued at the end.
+
+    Returns
+    -------
+    list[ListingExtraction]
+        Successful extraction results only (failed records are omitted).
+    """
+    if client is None:
+        client = _get_default_client()
+
+    results: list[ListingExtraction] = []
+
+    for raw_scrape in raw_scrapes:
+        payload = raw_scrape.payload
+
+        # ------------------------------------------------------------------
+        # Guard: reject empty / blank / None payloads before calling the LLM
+        # ------------------------------------------------------------------
+        if not payload or not payload.strip():
+            raw_scrape.status = "failed"
+            log = ExtractionLog(
+                raw_scrape_id=raw_scrape.id,
+                model=MODEL,
+                status="failed",
+                error="Empty or blank payload; skipping extraction",
+            )
+            session.add(log)
+            session.flush()
+            continue
+
+        # ------------------------------------------------------------------
+        # Happy path: pre-trim → LLM call → persist
+        # ------------------------------------------------------------------
+        try:
+            trimmed = pretrim(payload)
+
+            response = client.messages.parse(
+                model=MODEL,
+                max_tokens=4096,
+                system=[
+                    {
+                        "type": "text",
+                        "text": SYSTEM_PROMPT,
+                        "cache_control": {"type": "ephemeral"},
+                    }
+                ],
+                messages=[
+                    {
+                        "role": "user",
+                        "content": (
+                            f"Extract all listings from this scraped content "
+                            f"(source: {raw_scrape.source}):\n\n{trimmed}"
+                        ),
+                    }
+                ],
+                output_format=ListingExtraction,
+            )
+
+            usage = response.usage
+            log = ExtractionLog(
+                raw_scrape_id=raw_scrape.id,
+                model=MODEL,
+                input_tokens=getattr(usage, "input_tokens", None) if usage else None,
+                output_tokens=getattr(usage, "output_tokens", None) if usage else None,
+                cache_read_tokens=(
+                    getattr(usage, "cache_read_input_tokens", None) if usage else None
+                ),
+                status="success",
+            )
+            session.add(log)
+            raw_scrape.status = "extracted"
+            session.flush()
+            results.append(response.parsed)
+
+        except Exception as exc:  # noqa: BLE001
+            raw_scrape.status = "failed"
+            log = ExtractionLog(
+                raw_scrape_id=raw_scrape.id,
+                model=MODEL,
+                status="failed",
+                error=str(exc),
+            )
+            session.add(log)
+            session.flush()
+
+    session.commit()
+    return results
+
+
+# ---------------------------------------------------------------------------
+# Legacy types kept for pipeline.py compatibility
+# ---------------------------------------------------------------------------
 
 
 @dataclass
