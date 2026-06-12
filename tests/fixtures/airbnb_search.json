@@ -1,0 +1,480 @@
+{
+  "data": {
+    "presentation": {
+      "staysSearch": {
+        "results": {
+          "listings": [
+            {
+              "listing": {
+                "id": "123456789",
+                "name": "Sunny Studio near Eiffel Tower",
+                "coordinate": {
+                  "latitude": 48.8584,
+                  "longitude": 2.2945
+                },
+                "avgRating": 4.87,
+                "reviewsCount": 312,
+                "roomTypeCategory": "private_room",
+                "personCapacity": 2,
+                "contextualPictures": [
+                  {
+                    "url": "https://a0.muscache.com/pictures/abc123/original/pic1.jpg"
+                  }
+                ],
+                "listingObjType": "LISTING"
+              },
+              "pricingQuote": {
+                "rate": {
+                  "amount": 89.0,
+                  "currency": "EUR"
+                },
+                "totalPrice": {
+                  "amount": 623.0,
+                  "currency": "EUR"
+                },
+                "structuredStayDisplayPrice": {
+                  "primaryLine": {
+                    "price": "\u20ac89",
+                    "accessibilityLabel": "\u20ac89 per night"
+                  },
+                  "secondaryLine": {
+                    "price": "\u20ac623 total"
+                  }
+                }
+              },
+              "listingParamOverrides": {
+                "adults": 2,
+                "children": 0,
+                "infants": 0
+              }
+            },
+            {
+              "listing": {
+                "id": "987654321",
+                "name": "Charming Apartment in Le Marais",
+                "coordinate": {
+                  "latitude": 48.8566,
+                  "longitude": 2.3522
+                },
+                "avgRating": 4.95,
+                "reviewsCount": 87,
+                "roomTypeCategory": "entire_home",
+                "personCapacity": 4,
+                "contextualPictures": [
+                  {
+                    "url": "https://a0.muscache.com/pictures/xyz789/original/pic2.jpg"
+                  }
+                ],
+                "listingObjType": "LISTING"
+              },
+              "pricingQuote": {
+                "rate": {
+                  "amount": 145.0,
+                  "currency": "EUR"
+                },
+                "totalPrice": {
+                  "amount": 1015.0,
+                  "currency": "EUR"
+                },
+                "structuredStayDisplayPrice": {
+                  "primaryLine": {
+                    "price": "\u20ac145",
+                    "accessibilityLabel": "\u20ac145 per night"
+                  },
+                  "secondaryLine": {
+                    "price": "\u20ac1,015 total"
+                  }
+                }
+              },
+              "listingParamOverrides": {
+                "adults": 2,
+                "children": 0,
+                "infants": 0
+              }
+            },
+            {
+              "listing": {
+                "id": "555111222",
+                "name": "Modern Loft with City Views",
+                "coordinate": {
+                  "latitude": 48.8737,
+                  "longitude": 2.295
+                },
+                "avgRating": 4.72,
+                "reviewsCount": 204,
+                "roomTypeCategory": "entire_home",
+                "personCapacity": 3,
+                "contextualPictures": [
+                  {
+                    "url": "https://a0.muscache.com/pictures/lmn456/original/pic3.jpg"
+                  }
+                ],
+                "listingObjType": "LISTING"
+              },
+              "pricingQuote": {
+                "rate": {
+                  "amount": 110.0,
+                  "currency": "EUR"
+                },
+                "totalPrice": {
+                  "amount": 770.0,
+                  "currency": "EUR"
+                },
+                "structuredStayDisplayPrice": {
+                  "primaryLine": {
+                    "price": "\u20ac110",
+                    "accessibilityLabel": "\u20ac110 per night"
+                  },
+                  "secondaryLine": {
+                    "price": "\u20ac770 total"
+                  }
+                }
+              },
+              "listingParamOverrides": {
+                "adults": 2,
+                "children": 0,
+                "infants": 0
+              }
+            }
+          ],
+          "paginationInfo": {
+            "hasNextPage": true,
+            "nextCursor": "eyJzZWN0aW9uT2Zmc2V0IjozLCJpdGVtc09mZnNldCI6MTh9",
+            "endCursor": "eyJzZWN0aW9uT2Zmc2V0IjozLCJpdGVtc09mZnNldCI6MTh9",
+            "totalCount": 300
+          },
+          "filterState": null,
+          "searchSessionId": "sess_abc123def456"
+        },
+        "trackingData": {
+          "searchToken": "tok_xyz789",
+          "impressionId": "imp_abc",
+          "pageviewId": "pv_xyz",
+          "listingImpression": [
+            {
+              "listingId": "123456789",
+              "position": 0
+            }
+          ]
+        }
+      }
+    }
+  },
+  "extensions": {
+    "serverExperiments": {
+      "exp_search_ranking_v1": false,
+      "exp_price_display_v1": true,
+      "exp_map_clustering_v1": true,
+      "exp_filter_ui_v1": false,
+      "exp_booking_flow_v1": true,
+      "exp_photo_gallery_v1": true,
+      "exp_review_sort_v1": false,
+      "exp_host_badge_v1": true,
+      "exp_instant_book_v1": true,
+      "exp_flexible_dates_v1": false,
+      "exp_calendar_ui_v1": true,
+      "exp_checkout_flow_v1": true,
+      "exp_listing_description_v1": false,
+      "exp_amenity_icons_v1": true,
+      "exp_neighbourhood_info_v1": true,
+      "exp_trust_safety_v1": false,
+      "exp_cancellation_policy_v1": true,
+      "exp_payment_options_v1": true,
+      "exp_currency_switcher_v1": false,
+      "exp_language_detect_v1": true,
+      "exp_search_ranking_v2": true,
+      "exp_price_display_v2": false,
+      "exp_map_clustering_v2": true,
+      "exp_filter_ui_v2": true,
+      "exp_booking_flow_v2": false,
+      "exp_photo_gallery_v2": true,
+      "exp_review_sort_v2": true,
+      "exp_host_badge_v2": false,
+      "exp_instant_book_v2": true,
+      "exp_flexible_dates_v2": true,
+      "exp_calendar_ui_v2": false,
+      "exp_checkout_flow_v2": true,
+      "exp_listing_description_v2": true,
+      "exp_amenity_icons_v2": false,
+      "exp_neighbourhood_info_v2": true,
+      "exp_trust_safety_v2": true,
+      "exp_cancellation_policy_v2": false,
+      "exp_payment_options_v2": true,
+      "exp_currency_switcher_v2": true,
+      "exp_language_detect_v2": false,
+      "exp_search_ranking_v3": true,
+      "exp_price_display_v3": true,
+      "exp_map_clustering_v3": false,
+      "exp_filter_ui_v3": true,
+      "exp_booking_flow_v3": true,
+      "exp_photo_gallery_v3": false,
+      "exp_review_sort_v3": true,
+      "exp_host_badge_v3": true,
+      "exp_instant_book_v3": false,
+      "exp_flexible_dates_v3": true,
+      "exp_calendar_ui_v3": true,
+      "exp_checkout_flow_v3": false,
+      "exp_listing_description_v3": true,
+      "exp_amenity_icons_v3": true,
+      "exp_neighbourhood_info_v3": false,
+      "exp_trust_safety_v3": true,
+      "exp_cancellation_policy_v3": true,
+      "exp_payment_options_v3": false,
+      "exp_currency_switcher_v3": true,
+      "exp_language_detect_v3": true,
+      "exp_search_ranking_v4": false,
+      "exp_price_display_v4": true,
+      "exp_map_clustering_v4": true,
+      "exp_filter_ui_v4": false,
+      "exp_booking_flow_v4": true,
+      "exp_photo_gallery_v4": true,
+      "exp_review_sort_v4": false,
+      "exp_host_badge_v4": true,
+      "exp_instant_book_v4": true,
+      "exp_flexible_dates_v4": false,
+      "exp_calendar_ui_v4": true,
+      "exp_checkout_flow_v4": true,
+      "exp_listing_description_v4": false,
+      "exp_amenity_icons_v4": true,
+      "exp_neighbourhood_info_v4": true,
+      "exp_trust_safety_v4": false,
+      "exp_cancellation_policy_v4": true,
+      "exp_payment_options_v4": true,
+      "exp_currency_switcher_v4": false,
+      "exp_language_detect_v4": true,
+      "exp_search_ranking_v5": true,
+      "exp_price_display_v5": false,
+      "exp_map_clustering_v5": true,
+      "exp_filter_ui_v5": true,
+      "exp_booking_flow_v5": false,
+      "exp_photo_gallery_v5": true,
+      "exp_review_sort_v5": true,
+      "exp_host_badge_v5": false,
+      "exp_instant_book_v5": true,
+      "exp_flexible_dates_v5": true,
+      "exp_calendar_ui_v5": false,
+      "exp_checkout_flow_v5": true,
+      "exp_listing_description_v5": true,
+      "exp_amenity_icons_v5": false,
+      "exp_neighbourhood_info_v5": true,
+      "exp_trust_safety_v5": true,
+      "exp_cancellation_policy_v5": false,
+      "exp_payment_options_v5": true,
+      "exp_currency_switcher_v5": true,
+      "exp_language_detect_v5": false,
+      "exp_search_ranking_v6": true,
+      "exp_price_display_v6": true,
+      "exp_map_clustering_v6": false,
+      "exp_filter_ui_v6": true,
+      "exp_booking_flow_v6": true,
+      "exp_photo_gallery_v6": false,
+      "exp_review_sort_v6": true,
+      "exp_host_badge_v6": true,
+      "exp_instant_book_v6": false,
+      "exp_flexible_dates_v6": true,
+      "exp_calendar_ui_v6": true,
+      "exp_checkout_flow_v6": false,
+      "exp_listing_description_v6": true,
+      "exp_amenity_icons_v6": true,
+      "exp_neighbourhood_info_v6": false,
+      "exp_trust_safety_v6": true,
+      "exp_cancellation_policy_v6": true,
+      "exp_payment_options_v6": false,
+      "exp_currency_switcher_v6": true,
+      "exp_language_detect_v6": true,
+      "exp_search_ranking_v7": false,
+      "exp_price_display_v7": true,
+      "exp_map_clustering_v7": true,
+      "exp_filter_ui_v7": false,
+      "exp_booking_flow_v7": true,
+      "exp_photo_gallery_v7": true,
+      "exp_review_sort_v7": false,
+      "exp_host_badge_v7": true,
+      "exp_instant_book_v7": true,
+      "exp_flexible_dates_v7": false,
+      "exp_calendar_ui_v7": true,
+      "exp_checkout_flow_v7": true,
+      "exp_listing_description_v7": false,
+      "exp_amenity_icons_v7": true,
+      "exp_neighbourhood_info_v7": true,
+      "exp_trust_safety_v7": false,
+      "exp_cancellation_policy_v7": true,
+      "exp_payment_options_v7": true,
+      "exp_currency_switcher_v7": false,
+      "exp_language_detect_v7": true,
+      "exp_search_ranking_v8": true,
+      "exp_price_display_v8": false,
+      "exp_map_clustering_v8": true,
+      "exp_filter_ui_v8": true,
+      "exp_booking_flow_v8": false,
+      "exp_photo_gallery_v8": true,
+      "exp_review_sort_v8": true,
+      "exp_host_badge_v8": false,
+      "exp_instant_book_v8": true,
+      "exp_flexible_dates_v8": true,
+      "exp_calendar_ui_v8": false,
+      "exp_checkout_flow_v8": true,
+      "exp_listing_description_v8": true,
+      "exp_amenity_icons_v8": false,
+      "exp_neighbourhood_info_v8": true,
+      "exp_trust_safety_v8": true,
+      "exp_cancellation_policy_v8": false,
+      "exp_payment_options_v8": true,
+      "exp_currency_switcher_v8": true,
+      "exp_language_detect_v8": false,
+      "exp_search_ranking_v9": true,
+      "exp_price_display_v9": true,
+      "exp_map_clustering_v9": false,
+      "exp_filter_ui_v9": true,
+      "exp_booking_flow_v9": true,
+      "exp_photo_gallery_v9": false,
+      "exp_review_sort_v9": true,
+      "exp_host_badge_v9": true,
+      "exp_instant_book_v9": false,
+      "exp_flexible_dates_v9": true,
+      "exp_calendar_ui_v9": true,
+      "exp_checkout_flow_v9": false,
+      "exp_listing_description_v9": true,
+      "exp_amenity_icons_v9": true,
+      "exp_neighbourhood_info_v9": false,
+      "exp_trust_safety_v9": true,
+      "exp_cancellation_policy_v9": true,
+      "exp_payment_options_v9": false,
+      "exp_currency_switcher_v9": true,
+      "exp_language_detect_v9": true
+    },
+    "clientExperiments": {
+      "exp_search_ranking_v1": false,
+      "exp_price_display_v1": true,
+      "exp_map_clustering_v1": true,
+      "exp_filter_ui_v1": false,
+      "exp_booking_flow_v1": true,
+      "exp_photo_gallery_v1": true,
+      "exp_review_sort_v1": false,
+      "exp_host_badge_v1": true,
+      "exp_instant_book_v1": true,
+      "exp_flexible_dates_v1": false,
+      "exp_calendar_ui_v1": true,
+      "exp_checkout_flow_v1": true,
+      "exp_listing_description_v1": false,
+      "exp_amenity_icons_v1": true,
+      "exp_neighbourhood_info_v1": true,
+      "exp_trust_safety_v1": false,
+      "exp_cancellation_policy_v1": true,
+      "exp_payment_options_v1": true,
+      "exp_currency_switcher_v1": false,
+      "exp_language_detect_v1": true,
+      "exp_search_ranking_v2": true,
+      "exp_price_display_v2": false,
+      "exp_map_clustering_v2": true,
+      "exp_filter_ui_v2": true,
+      "exp_booking_flow_v2": false,
+      "exp_photo_gallery_v2": true,
+      "exp_review_sort_v2": true,
+      "exp_host_badge_v2": false,
+      "exp_instant_book_v2": true,
+      "exp_flexible_dates_v2": true,
+      "exp_calendar_ui_v2": false,
+      "exp_checkout_flow_v2": true,
+      "exp_listing_description_v2": true,
+      "exp_amenity_icons_v2": false,
+      "exp_neighbourhood_info_v2": true,
+      "exp_trust_safety_v2": true,
+      "exp_cancellation_policy_v2": false,
+      "exp_payment_options_v2": true,
+      "exp_currency_switcher_v2": true,
+      "exp_language_detect_v2": false,
+      "exp_search_ranking_v3": true,
+      "exp_price_display_v3": true,
+      "exp_map_clustering_v3": false,
+      "exp_filter_ui_v3": true,
+      "exp_booking_flow_v3": true,
+      "exp_photo_gallery_v3": false,
+      "exp_review_sort_v3": true,
+      "exp_host_badge_v3": true,
+      "exp_instant_book_v3": false,
+      "exp_flexible_dates_v3": true,
+      "exp_calendar_ui_v3": true,
+      "exp_checkout_flow_v3": false,
+      "exp_listing_description_v3": true,
+      "exp_amenity_icons_v3": true,
+      "exp_neighbourhood_info_v3": false,
+      "exp_trust_safety_v3": true,
+      "exp_cancellation_policy_v3": true,
+      "exp_payment_options_v3": false,
+      "exp_currency_switcher_v3": true,
+      "exp_language_detect_v3": true,
+      "exp_search_ranking_v4": false,
+      "exp_price_display_v4": true,
+      "exp_map_clustering_v4": true,
+      "exp_filter_ui_v4": false,
+      "exp_booking_flow_v4": true,
+      "exp_photo_gallery_v4": true,
+      "exp_review_sort_v4": false,
+      "exp_host_badge_v4": true,
+      "exp_instant_book_v4": true,
+      "exp_flexible_dates_v4": false,
+      "exp_calendar_ui_v4": true,
+      "exp_checkout_flow_v4": true,
+      "exp_listing_description_v4": false,
+      "exp_amenity_icons_v4": true,
+      "exp_neighbourhood_info_v4": true,
+      "exp_trust_safety_v4": false,
+      "exp_cancellation_policy_v4": true,
+      "exp_payment_options_v4": true,
+      "exp_currency_switcher_v4": false,
+      "exp_language_detect_v4": true,
+      "exp_search_ranking_v5": true,
+      "exp_price_display_v5": false,
+      "exp_map_clustering_v5": true,
+      "exp_filter_ui_v5": true,
+      "exp_booking_flow_v5": false,
+      "exp_photo_gallery_v5": true,
+      "exp_review_sort_v5": true,
+      "exp_host_badge_v5": false,
+      "exp_instant_book_v5": true,
+      "exp_flexible_dates_v5": true,
+      "exp_calendar_ui_v5": false,
+      "exp_checkout_flow_v5": true,
+      "exp_listing_description_v5": true,
+      "exp_amenity_icons_v5": false,
+      "exp_neighbourhood_info_v5": true,
+      "exp_trust_safety_v5": true,
+      "exp_cancellation_policy_v5": false,
+      "exp_payment_options_v5": true,
+      "exp_currency_switcher_v5": true,
+      "exp_language_detect_v5": false,
+      "exp_search_ranking_v6": true,
+      "exp_price_display_v6": true,
+      "exp_map_clustering_v6": false,
+      "exp_filter_ui_v6": true,
+      "exp_booking_flow_v6": true,
+      "exp_photo_gallery_v6": false,
+      "exp_review_sort_v6": true,
+      "exp_host_badge_v6": true,
+      "exp_instant_book_v6": false,
+      "exp_flexible_dates_v6": true,
+      "exp_calendar_ui_v6": true,
+      "exp_checkout_flow_v6": false,
+      "exp_listing_description_v6": true,
+      "exp_amenity_icons_v6": true,
+      "exp_neighbourhood_info_v6": false,
+      "exp_trust_safety_v6": true,
+      "exp_cancellation_policy_v6": true,
+      "exp_payment_options_v6": false,
+      "exp_currency_switcher_v6": true,
+      "exp_language_detect_v6": true
+    },
+    "queryId": "StaysSearch_GetDestination_3a7f9c",
+    "shaDigest": "sha256:4a2bc1def89ab3c55e7f2a19084dce3bc478fa91",
+    "operationName": "StaysSearch",
+    "prefetchVariables": null,
+    "cacheTags": [
+      "stays_search",
+      "pricing_v2",
+      "map_v3",
+      "review_score_v1",
+      "instant_book_v2"
+    ]
+  }
+}

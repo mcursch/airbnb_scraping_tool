@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hotels in Paris — Booking.com</title>
+<style>
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+         background: #f5f5f5; color: #333; line-height: 1.5; }
+  .header { background: #003580; color: #fff; padding: 0 20px; height: 56px;
+            display: flex; align-items: center; justify-content: space-between; }
+  .header__logo { font-size: 24px; font-weight: 700; color: #febb02; }
+  .header__nav { display: flex; gap: 16px; }
+  .header__nav a { color: #fff; text-decoration: none; font-size: 14px; }
+  .search-box { background: #fff; border-radius: 4px; padding: 16px;
+                max-width: 1080px; margin: 24px auto; box-shadow: 0 2px 8px rgba(0,0,0,.12); }
+  .search-box__row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .search-box__input { flex: 1; min-width: 180px; border: 1px solid #ccc;
+                       border-radius: 4px; padding: 10px 14px; font-size: 14px; }
+  .search-box__btn { background: #0071c2; color: #fff; border: none; border-radius: 4px;
+                     padding: 10px 20px; font-size: 14px; cursor: pointer; font-weight: 600; }
+  .search-box__btn:hover { background: #005fa3; }
+  .results { max-width: 1080px; margin: 0 auto 40px; display: grid;
+             grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+  .card { background: #fff; border-radius: 8px; overflow: hidden;
+          box-shadow: 0 2px 8px rgba(0,0,0,.1); transition: box-shadow .2s; }
+  .card:hover { box-shadow: 0 4px 16px rgba(0,0,0,.18); }
+  .card__img { width: 100%; height: 180px; object-fit: cover; }
+  .card__body { padding: 12px 16px; }
+  .card__name { font-size: 15px; font-weight: 600; margin-bottom: 4px;
+                white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .card__loc { font-size: 12px; color: #666; margin-bottom: 8px; }
+  .card__rating { display: flex; align-items: center; gap: 4px; font-size: 13px; }
+  .card__rating-score { background: #003580; color: #fff; border-radius: 4px 4px 4px 0;
+                        padding: 2px 6px; font-weight: 700; font-size: 13px; }
+  .card__price { text-align: right; padding: 12px 16px; border-top: 1px solid #f0f0f0; }
+  .card__price-nightly { font-size: 12px; color: #666; }
+  .card__price-amount { font-size: 20px; font-weight: 700; color: #cc0000; }
+  .footer { background: #003580; color: #fff; padding: 24px 20px; margin-top: 40px; }
+  .footer__grid { max-width: 1080px; margin: 0 auto;
+                  display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px; }
+  .footer__col h4 { font-size: 13px; font-weight: 700; margin-bottom: 8px; text-transform: uppercase; }
+  .footer__col ul { list-style: none; }
+  .footer__col li { font-size: 12px; margin-bottom: 4px; }
+  .footer__col a { color: #cdd8e3; text-decoration: none; }
+  .footer__col a:hover { color: #fff; text-decoration: underline; }
+  @media (max-width: 640px) {
+    .search-box__row { flex-direction: column; }
+    .footer__grid { grid-template-columns: 1fr 1fr; }
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+         background: #f5f5f5; color: #333; line-height: 1.5; }
+  .header { background: #003580; color: #fff; padding: 0 20px; height: 56px;
+            display: flex; align-items: center; justify-content: space-between; }
+  .header__logo { font-size: 24px; font-weight: 700; color: #febb02; }
+  .header__nav { display: flex; gap: 16px; }
+  .header__nav a { color: #fff; text-decoration: none; font-size: 14px; }
+  .search-box { background: #fff; border-radius: 4px; padding: 16px;
+                max-width: 1080px; margin: 24px auto; box-shadow: 0 2px 8px rgba(0,0,0,.12); }
+  .search-box__row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .search-box__input { flex: 1; min-width: 180px; border: 1px solid #ccc;
+                       border-radius: 4px; padding: 10px 14px; font-size: 14px; }
+  .search-box__btn { background: #0071c2; color: #fff; border: none; border-radius: 4px;
+                     padding: 10px 20px; font-size: 14px; cursor: pointer; font-weight: 600; }
+  .search-box__btn:hover { background: #005fa3; }
+  .results { max-width: 1080px; margin: 0 auto 40px; display: grid;
+             grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+  .card { background: #fff; border-radius: 8px; overflow: hidden;
+          box-shadow: 0 2px 8px rgba(0,0,0,.1); transition: box-shadow .2s; }
+  .card:hover { box-shadow: 0 4px 16px rgba(0,0,0,.18); }
+  .card__img { width: 100%; height: 180px; object-fit: cover; }
+  .card__body { padding: 12px 16px; }
+  .card__name { font-size: 15px; font-weight: 600; margin-bottom: 4px;
+                white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .card__loc { font-size: 12px; color: #666; margin-bottom: 8px; }
+  .card__rating { display: flex; align-items: center; gap: 4px; font-size: 13px; }
+  .card__rating-score { background: #003580; color: #fff; border-radius: 4px 4px 4px 0;
+                        padding: 2px 6px; font-weight: 700; font-size: 13px; }
+  .card__price { text-align: right; padding: 12px 16px; border-top: 1px solid #f0f0f0; }
+  .card__price-nightly { font-size: 12px; color: #666; }
+  .card__price-amount { font-size: 20px; font-weight: 700; color: #cc0000; }
+  .footer { background: #003580; color: #fff; padding: 24px 20px; margin-top: 40px; }
+  .footer__grid { max-width: 1080px; margin: 0 auto;
+                  display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px; }
+  .footer__col h4 { font-size: 13px; font-weight: 700; margin-bottom: 8px; text-transform: uppercase; }
+  .footer__col ul { list-style: none; }
+  .footer__col li { font-size: 12px; margin-bottom: 4px; }
+  .footer__col a { color: #cdd8e3; text-decoration: none; }
+  .footer__col a:hover { color: #fff; text-decoration: underline; }
+  @media (max-width: 640px) {
+    .search-box__row { flex-direction: column; }
+    .footer__grid { grid-template-columns: 1fr 1fr; }
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+         background: #f5f5f5; color: #333; line-height: 1.5; }
+  .header { background: #003580; color: #fff; padding: 0 20px; height: 56px;
+            display: flex; align-items: center; justify-content: space-between; }
+  .header__logo { font-size: 24px; font-weight: 700; color: #febb02; }
+  .header__nav { display: flex; gap: 16px; }
+  .header__nav a { color: #fff; text-decoration: none; font-size: 14px; }
+  .search-box { background: #fff; border-radius: 4px; padding: 16px;
+                max-width: 1080px; margin: 24px auto; box-shadow: 0 2px 8px rgba(0,0,0,.12); }
+  .search-box__row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .search-box__input { flex: 1; min-width: 180px; border: 1px solid #ccc;
+                       border-radius: 4px; padding: 10px 14px; font-size: 14px; }
+  .search-box__btn { background: #0071c2; color: #fff; border: none; border-radius: 4px;
+                     padding: 10px 20px; font-size: 14px; cursor: pointer; font-weight: 600; }
+  .search-box__btn:hover { background: #005fa3; }
+  .results { max-width: 1080px; margin: 0 auto 40px; display: grid;
+             grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+  .card { background: #fff; border-radius: 8px; overflow: hidden;
+          box-shadow: 0 2px 8px rgba(0,0,0,.1); transition: box-shadow .2s; }
+  .card:hover { box-shadow: 0 4px 16px rgba(0,0,0,.18); }
+  .card__img { width: 100%; height: 180px; object-fit: cover; }
+  .card__body { padding: 12px 16px; }
+  .card__name { font-size: 15px; font-weight: 600; margin-bottom: 4px;
+                white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .card__loc { font-size: 12px; color: #666; margin-bottom: 8px; }
+  .card__rating { display: flex; align-items: center; gap: 4px; font-size: 13px; }
+  .card__rating-score { background: #003580; color: #fff; border-radius: 4px 4px 4px 0;
+                        padding: 2px 6px; font-weight: 700; font-size: 13px; }
+  .card__price { text-align: right; padding: 12px 16px; border-top: 1px solid #f0f0f0; }
+  .card__price-nightly { font-size: 12px; color: #666; }
+  .card__price-amount { font-size: 20px; font-weight: 700; color: #cc0000; }
+  .footer { background: #003580; color: #fff; padding: 24px 20px; margin-top: 40px; }
+  .footer__grid { max-width: 1080px; margin: 0 auto;
+                  display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px; }
+  .footer__col h4 { font-size: 13px; font-weight: 700; margin-bottom: 8px; text-transform: uppercase; }
+  .footer__col ul { list-style: none; }
+  .footer__col li { font-size: 12px; margin-bottom: 4px; }
+  .footer__col a { color: #cdd8e3; text-decoration: none; }
+  .footer__col a:hover { color: #fff; text-decoration: underline; }
+  @media (max-width: 640px) {
+    .search-box__row { flex-direction: column; }
+    .footer__grid { grid-template-columns: 1fr 1fr; }
+  }
+
+</style>
+</head>
+<body>
+<header class="header">
+  <span class="header__logo">booking.com</span>
+  <nav class="header__nav">
+    <a href="/stays">Stays</a>
+    <a href="/flights">Flights</a>
+    <a href="/cars">Car rentals</a>
+    <a href="/attractions">Attractions</a>
+  </nav>
+</header>
+
+<div class="search-box">
+  <div class="search-box__row">
+    <input class="search-box__input" type="text" placeholder="Where are you going?" value="Paris">
+    <input class="search-box__input" type="date" value="2025-08-15">
+    <input class="search-box__input" type="date" value="2025-08-22">
+    <button class="search-box__btn" data-track="search_submit">Search</button>
+  </div>
+</div>
+
+<div id="results" class="results">
+  <!-- Hotel cards rendered server-side for SEO; JS hydrates interactivity -->
+  <article class="card" data-hotel-id="hotel_paris_001">
+    <img class="card__img" src="https://cf.bstatic.com/xdata/images/hotel/square200/12345.jpg" alt="Hôtel Rivoli Palace">
+    <div class="card__body">
+      <h2 class="card__name">Hôtel Rivoli Palace</h2>
+      <p class="card__loc">15 Rue de Rivoli, Paris Centre</p>
+      <div class="card__rating">
+        <span class="card__rating-score">8.6</span>
+        <span>Very Good · 2,147 reviews</span>
+      </div>
+    </div>
+    <div class="card__price">
+      <p class="card__price-nightly">per night</p>
+      <p class="card__price-amount">€128</p>
+    </div>
+  </article>
+  <article class="card" data-hotel-id="hotel_paris_002">
+    <img class="card__img" src="https://cf.bstatic.com/xdata/images/hotel/square200/67890.jpg" alt="Boutique Marais Suites">
+    <div class="card__body">
+      <h2 class="card__name">Boutique Marais Suites</h2>
+      <p class="card__loc">8 Rue des Francs-Bourgeois, Le Marais</p>
+      <div class="card__rating">
+        <span class="card__rating-score">9.1</span>
+        <span>Exceptional · 834 reviews</span>
+      </div>
+    </div>
+    <div class="card__price">
+      <p class="card__price-nightly">per night, breakfast included</p>
+      <p class="card__price-amount">€195</p>
+    </div>
+  </article>
+</div>
+
+<script>
+
+(function() {
+  'use strict';
+  var _analytics = { pageviewId: 'pv_' + Math.random().toString(36).substr(2),
+                      sessionId: 'sess_' + Date.now(), platform: 'web' };
+  function sendBeacon(event, props) {
+    var payload = Object.assign({}, _analytics, props, { event: event, ts: Date.now() });
+    if (navigator.sendBeacon) {
+      navigator.sendBeacon('/api/v1/track', JSON.stringify(payload));
+    }
+  }
+  window.addEventListener('load', function() { sendBeacon('page_view', { url: location.href }); });
+  document.addEventListener('click', function(e) {
+    var el = e.target.closest('[data-track]');
+    if (el) sendBeacon('click', { element: el.dataset.track });
+  });
+  var _expConfig = {
+    search_sort_v3: true, price_filter_v2: false, map_toggle_v1: true,
+    review_badge_v4: true, photo_carousel_v2: false, deal_highlight_v1: true,
+    genius_badge_v3: false, breakfast_icon_v2: true, free_cancel_badge_v1: true,
+    mobile_cta_v5: false, filter_sidebar_v2: true, sort_dropdown_v3: true,
+    popular_filter_v1: false, location_score_v2: true, distance_badge_v1: false,
+    currency_format_v2: true, loading_skeleton_v3: true, sticky_header_v2: false,
+    lazy_images_v4: true, infinite_scroll_v2: false, page_speed_v3: true,
+  };
+  window.__EXP_CONFIG__ = _expConfig;
+  var _i18n = {
+    "search.placeholder": "Where are you going?",
+    "search.btn": "Search",
+    "sort.price_asc": "Price (lowest first)",
+    "sort.price_desc": "Price (highest first)",
+    "sort.rating": "Best reviewed",
+    "filter.stars": "Star rating",
+    "filter.price": "Price per night",
+    "filter.free_cancel": "Free cancellation",
+    "results.count": "{n} properties found",
+    "card.reviews": "{n} reviews",
+    "card.per_night": "per night",
+    "card.book_now": "See availability",
+    "footer.about": "About Booking.com",
+    "footer.help": "Help Centre",
+    "footer.careers": "Careers",
+    "footer.sustainability": "Sustainability",
+    "footer.press": "Press centre",
+    "footer.safety": "Safety resource centre",
+    "cookie.accept": "Accept",
+    "cookie.decline": "Decline",
+    "cookie.message": "We use cookies to give you the best experience.",
+  };
+  window.__I18N__ = _i18n;
+})();
+
+</script>
+
+<script type="application/json" id="page-data">
+{
+  "hotels": [
+    {
+      "id": "hotel_paris_001",
+      "name": "H\u00f4tel Rivoli Palace",
+      "price": {
+        "amount": 128,
+        "currency": "EUR"
+      },
+      "location": {
+        "lat": 48.8606,
+        "lon": 2.3376
+      },
+      "address": "15 Rue de Rivoli, 75001 Paris",
+      "city": "Paris",
+      "country": "France",
+      "rating": 8.6,
+      "review_count": 2147,
+      "star_category": 4,
+      "bedrooms": 1,
+      "beds": 1,
+      "property_type": "Hotel",
+      "url": "/hotel/fr/rivoli-palace-paris.en-gb.html",
+      "thumbnail": "https://cf.bstatic.com/xdata/images/hotel/square200/12345.jpg",
+      "free_cancellation": true,
+      "breakfast_included": false
+    },
+    {
+      "id": "hotel_paris_002",
+      "name": "Boutique Marais Suites",
+      "price": {
+        "amount": 195,
+        "currency": "EUR"
+      },
+      "location": {
+        "lat": 48.8575,
+        "lon": 2.3594
+      },
+      "address": "8 Rue des Francs-Bourgeois, 75004 Paris",
+      "city": "Paris",
+      "country": "France",
+      "rating": 9.1,
+      "review_count": 834,
+      "star_category": 4,
+      "bedrooms": 1,
+      "beds": 1,
+      "property_type": "Aparthotel",
+      "url": "/hotel/fr/boutique-marais-suites.en-gb.html",
+      "thumbnail": "https://cf.bstatic.com/xdata/images/hotel/square200/67890.jpg",
+      "free_cancellation": true,
+      "breakfast_included": true
+    }
+  ],
+  "meta": {
+    "total_count": 847,
+    "page": 1,
+    "page_size": 25,
+    "sort": "popularity",
+    "currency": "EUR",
+    "checkin": "2025-08-15",
+    "checkout": "2025-08-22"
+  },
+  "seoData": {
+    "title": "Hotels in Paris \u2014 Best Price Guarantee",
+    "metaDescription": "Find the best hotels in Paris at the lowest prices.",
+    "canonicalUrl": "https://www.booking.com/searchresults/fr/paris.en-gb.html",
+    "ogImage": "https://cf.bstatic.com/static/img/og/paris-hotels.jpg"
+  },
+  "analyticsConfig": {
+    "pageCategory": "searchresults",
+    "searchId": "srch_abc123",
+    "sessionToken": "sess_xyz789abc",
+    "experimentGroup": "control",
+    "featureFlags": {
+      "new_filter_ui": true,
+      "map_view_v3": false,
+      "deal_labels": true
+    }
+  }
+}
+</script>
+
+<footer class="footer">
+  <div class="footer__grid">
+    <div class="footer__col">
+      <h4>Support</h4>
+      <ul>
+        <li><a href="/help">Help Centre</a></li>
+        <li><a href="/covid">COVID-19 FAQs</a></li>
+        <li><a href="/contact">Contact us</a></li>
+        <li><a href="/safety">Safety resource centre</a></li>
+      </ul>
+    </div>
+    <div class="footer__col">
+      <h4>Discover</h4>
+      <ul>
+        <li><a href="/genius">Genius loyalty programme</a></li>
+        <li><a href="/seasonal">Seasonal and holiday deals</a></li>
+        <li><a href="/travel-articles">Travel articles</a></li>
+        <li><a href="/careers">Careers</a></li>
+      </ul>
+    </div>
+    <div class="footer__col">
+      <h4>Terms &amp; settings</h4>
+      <ul>
+        <li><a href="/privacy">Privacy &amp; cookie statement</a></li>
+        <li><a href="/terms">Terms &amp; conditions</a></li>
+        <li><a href="/msa">Modern Slavery Statement</a></li>
+        <li><a href="/sustainability">Sustainability</a></li>
+      </ul>
+    </div>
+    <div class="footer__col">
+      <h4>Partners</h4>
+      <ul>
+        <li><a href="/extranet">Extranet login</a></li>
+        <li><a href="/affiliates">Affiliate programme</a></li>
+        <li><a href="/list-property">List your property</a></li>
+        <li><a href="/business">Booking.com for Business</a></li>
+      </ul>
+    </div>
+  </div>
+</footer>
+</body>
+</html>
