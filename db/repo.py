@@ -14,8 +14,8 @@ def create_search_run(
     checkout: str | None,
     guests: int,
     sources: str,
-) -> SearchRun:
-    """Insert a new SearchRun and return it (with id populated)."""
+) -> int:
+    """Insert a new SearchRun row and return its integer primary-key id."""
     with get_session() as session:
         run = SearchRun(
             area_query=area_query,
@@ -28,7 +28,6 @@ def create_search_run(
         session.add(run)
         session.commit()
         session.refresh(run)
-        # Detach from session so callers can use the object freely
         run_id = run.id
         return run_id
 

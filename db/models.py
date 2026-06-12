@@ -1,6 +1,7 @@
 """SQLAlchemy ORM models."""
 from __future__ import annotations
 
+import functools
 import json
 from datetime import datetime, timezone
 
@@ -107,12 +108,13 @@ class ExtractionLog(Base):
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
+@functools.lru_cache(maxsize=None)
 def get_engine():
+    """Return the shared Engine singleton; creates tables on first call only."""
     engine = create_engine(settings.database_url, echo=False)
     Base.metadata.create_all(engine)
     return engine
 
 
 def get_session() -> Session:
-    engine = get_engine()
-    return Session(engine)
+    return Session(get_engine())

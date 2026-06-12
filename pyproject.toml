@@ -2,7 +2,7 @@
 name = "airbnb-scraping-tool"
 version = "0.1.0"
 description = "Short-Stay Market Scanner"
-requires-python = ">=3.12"
+requires-python = ">=3.10"
 dependencies = [
     "streamlit>=1.35.0",
     "sqlalchemy>=2.0",
