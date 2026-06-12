@@ -99,3 +99,31 @@ DEFAULT_MAX_PAGES: int = 5
 # Approximate inter-request delay range in seconds (randomised in scraper).
 REQUEST_DELAY_MIN_S: float = 1.5
 REQUEST_DELAY_MAX_S: float = 4.0
+
+# ---------------------------------------------------------------------------
+# Playwright / browser defaults
+# ---------------------------------------------------------------------------
+
+DEFAULT_HEADLESS: bool = True
+DEFAULT_PAGE_TIMEOUT_MS: int = 30_000
+DEFAULT_EXTRA_WAIT_MIN: float = 1.0
+DEFAULT_EXTRA_WAIT_MAX: float = 3.0
+DEFAULT_USER_AGENT: str = (
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+)
+
+# ---------------------------------------------------------------------------
+# Endpoint URL fragment patterns (string substrings matched against response URLs)
+# ---------------------------------------------------------------------------
+
+# Tuple of substrings; if any appears in a response URL it is a search API call.
+AIRBNB_ENDPOINT_PATTERNS: tuple[str, ...] = (
+    "StaysSearch",
+    "explore_tabs",
+    "ExploreSearch",
+    "api/v3/Stays",
+)
+
+# URL path template for the Airbnb homes search page.
+AIRBNB_SEARCH_PATH: str = "/s/{area}/homes"

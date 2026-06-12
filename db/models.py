@@ -2,6 +2,8 @@
 
 from datetime import datetime
 
+import hashlib
+
 from sqlalchemy import (
     Column,
     DateTime,
@@ -102,7 +104,7 @@ class RawScrape(Base):
     __tablename__ = "raw_scrapes"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    run_id = Column(Integer, ForeignKey("search_runs.id"), nullable=False)
+    run_id = Column(Integer, ForeignKey("search_runs.id"), nullable=True)
     source = Column(String, nullable=False)
     url = Column(String)
     payload = Column(Text)
@@ -110,6 +112,12 @@ class RawScrape(Base):
     fetched_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     status = Column(String, default="pending", nullable=False)
     error = Column(Text)
+    page_number = Column(Integer, nullable=True)
+
+    @staticmethod
+    def compute_hash(payload: str) -> str:
+        """Return SHA-256 hex digest of *payload*."""
+        return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
 class ExtractionLog(Base):

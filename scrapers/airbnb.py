@@ -18,14 +18,34 @@ in this file.
 from __future__ import annotations
 
 import asyncio
+import json
+import logging
 import random
+import time
 import urllib.parse
 from collections.abc import AsyncGenerator
+from typing import TYPE_CHECKING, Any
 
-from playwright.async_api import Response, async_playwright
-from playwright_stealth import Stealth
+try:
+    from playwright.async_api import Response, async_playwright
+    from playwright_stealth import Stealth
+    _PLAYWRIGHT_AVAILABLE = True
+except ImportError:
+    _PLAYWRIGHT_AVAILABLE = False
 
-from scrapers.base import RawPayload, ScrapeProvider
+try:
+    from playwright.sync_api import sync_playwright as _sync_playwright
+except ImportError:
+    _sync_playwright = None  # type: ignore[assignment]
+
+if TYPE_CHECKING:
+    from playwright.async_api import Response
+    from playwright.sync_api import Page
+
+from scrapers.base import ScrapeProvider, SearchQuery as BaseSearchQuery
+
+# RawPayload is a parsed-JSON dict from an Airbnb API response.
+RawPayload = dict
 from scrapers.constants import (
     AIRBNB_BASE_URL,
     AIRBNB_ENDPOINT_PATTERNS,
@@ -37,6 +57,95 @@ from scrapers.constants import (
     DEFAULT_USER_AGENT,
 )
 from schemas.search_query import SearchQuery
+from config import settings
+from db.repo import create_raw_scrape
+
+log = logging.getLogger(__name__)
+
+# Cursor keys searched (in order) inside Airbnb API response JSON.
+_CURSOR_KEYS: tuple[str, ...] = (
+    "paginationCursor",
+    "nextPageCursor",
+    "cursor",
+)
+
+# Selectors for the "Next" pagination button (tried in order).
+_NEXT_BTN_SELECTORS: tuple[str, ...] = (
+    '[aria-label="Next"]',
+    'a[data-testid="pagination-next"]',
+    'button[data-testid="pagination-next"]',
+    'a[aria-label="Next"]',
+)
+
+
+# ---------------------------------------------------------------------------
+# Module-level sync helper functions (used by sync pagination flow)
+# ---------------------------------------------------------------------------
+
+
+def _is_search_response(url: str) -> bool:
+    """Return True if *url* looks like an Airbnb search-results API endpoint."""
+    return any(pat in url for pat in AIRBNB_ENDPOINT_PATTERNS)
+
+
+def _extract_cursor(payload_text: str) -> str | None:
+    """Try to extract a next-page cursor string from a JSON payload."""
+    try:
+        data = json.loads(payload_text)
+    except (json.JSONDecodeError, ValueError):
+        return None
+
+    def _search(obj: Any) -> str | None:
+        if isinstance(obj, dict):
+            for key in _CURSOR_KEYS:
+                if key in obj and isinstance(obj[key], str) and obj[key]:
+                    return obj[key]
+            for v in obj.values():
+                result = _search(v)
+                if result:
+                    return result
+        elif isinstance(obj, list):
+            for item in obj:
+                result = _search(item)
+                if result:
+                    return result
+        return None
+
+    return _search(data)
+
+
+def _build_search_url(query: BaseSearchQuery) -> str:
+    """Build an Airbnb homes search URL from a :class:`SearchQuery`."""
+    area_encoded = urllib.parse.quote(query.area, safe="")
+    path = AIRBNB_SEARCH_PATH.format(area=area_encoded)
+
+    params: dict[str, str] = {}
+    if query.checkin is not None:
+        params["checkin"] = str(query.checkin)
+    if query.checkout is not None:
+        params["checkout"] = str(query.checkout)
+    if query.guests and query.guests > 1:
+        params["adults"] = str(query.guests)
+
+    qs = urllib.parse.urlencode(params)
+    base = f"{AIRBNB_BASE_URL}{path}"
+    return f"{base}?{qs}" if qs else base
+
+
+def _polite_sleep(page_index: int) -> float:
+    """Sleep a random duration between page fetches; return seconds slept."""
+    lo = settings.rate_limit_min_seconds
+    hi = settings.rate_limit_max_seconds
+    duration = random.uniform(lo, hi)
+    log.info(
+        "Rate-limit sleep before page %d: sleeping %.2fs (window %.1f–%.1fs)",
+        page_index,
+        duration,
+        lo,
+        hi,
+    )
+    time.sleep(duration)
+    return duration
 
 
 class AirbnbScraper(ScrapeProvider):
@@ -55,12 +164,14 @@ class AirbnbScraper(ScrapeProvider):
 
     def __init__(
         self,
+        max_pages: int | None = None,
         *,
         headless: bool = DEFAULT_HEADLESS,
         page_timeout_ms: int = DEFAULT_PAGE_TIMEOUT_MS,
         extra_wait_min: float = DEFAULT_EXTRA_WAIT_MIN,
         extra_wait_max: float = DEFAULT_EXTRA_WAIT_MAX,
     ) -> None:
+        self._max_pages = max_pages if max_pages is not None else settings.max_pages
         self.headless = headless
         self.page_timeout_ms = page_timeout_ms
         self.extra_wait_min = extra_wait_min
@@ -86,23 +197,157 @@ class AirbnbScraper(ScrapeProvider):
             yield url, payload
 
     # ------------------------------------------------------------------
-    # Internal helpers
+    # Sync pagination flow (used by tests via monkeypatching)
+    # ------------------------------------------------------------------
+
+    def _run_search(
+        self,
+        page: Any,
+        query: BaseSearchQuery,
+        session: Any,
+        run_id: int | None,
+    ) -> list[Any]:
+        """Drive a synchronous search over up to ``_max_pages`` pages.
+
+        Each captured payload is persisted immediately via :func:`create_raw_scrape`.
+        Returns the list of persisted :class:`~db.models.RawScrape` instances.
+        """
+        captured: list[Any] = []
+        page_num = 1
+        url = _build_search_url(query)
+
+        while page_num <= self._max_pages:
+            payload_text, intercepted_url = self._load_and_capture(page, url)
+
+            if payload_text is None:
+                log.warning("Page %d: no matching response intercepted; stopping.", page_num)
+                break
+
+            raw = create_raw_scrape(
+                session,
+                source="airbnb",
+                url=intercepted_url or url,
+                payload=payload_text,
+                run_id=run_id,
+                status="pending",
+                page_number=page_num,
+            )
+            if raw is None:
+                log.info("Page %d: duplicate payload skipped.", page_num)
+            else:
+                captured.append(raw)
+
+            if page_num >= self._max_pages:
+                break
+
+            _polite_sleep(page_num + 1)
+
+            cursor = _extract_cursor(payload_text)
+            url = self._next_page_url(page, url, cursor, page_num)
+            if url is None:
+                break
+
+            page_num += 1
+
+        return captured
+
+    def _load_and_capture(
+        self, page: Any, url: str
+    ) -> tuple[str | None, str | None]:
+        """Navigate to *url* using a sync Playwright page and capture the first
+        matching API response.  Returns ``(payload_text, intercepted_url)``.
+
+        This default implementation uses ``sync_playwright``; override or
+        monkeypatch for tests.
+        """
+        if _sync_playwright is None:
+            raise RuntimeError("playwright is not installed")
+        captured_payload: list[str] = []
+        captured_url: list[str] = []
+
+        def _on_response(response: Any) -> None:
+            if captured_payload:
+                return
+            if not _is_search_response(response.url):
+                return
+            try:
+                text = response.text()
+                if text and len(text) > 100:
+                    captured_payload.append(text)
+                    captured_url.append(response.url)
+            except Exception:  # noqa: BLE001
+                pass
+
+        page.on("response", _on_response)
+        try:
+            page.goto(url, wait_until="networkidle", timeout=self.page_timeout_ms)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("Navigation to %s raised: %s", url, exc)
+        finally:
+            try:
+                page.remove_listener("response", _on_response)
+            except Exception:  # noqa: BLE001
+                pass
+
+        if captured_payload:
+            return captured_payload[0], captured_url[0]
+        return None, None
+
+    def _next_page_url(
+        self,
+        page: Any,
+        current_url: str,
+        cursor: str | None,
+        current_page: int,
+    ) -> str | None:
+        """Return the URL for the next page, or None if pagination is exhausted."""
+        if cursor:
+            parsed = urllib.parse.urlparse(current_url)
+            params = dict(urllib.parse.parse_qsl(parsed.query))
+            params["cursor"] = cursor
+            params["section_offset"] = str(current_page)
+            new_query = urllib.parse.urlencode(params)
+            return urllib.parse.urlunparse(parsed._replace(query=new_query))
+
+        for selector in _NEXT_BTN_SELECTORS:
+            try:
+                element = page.query_selector(selector)
+                if element is None:
+                    continue
+                href = element.get_attribute("href")
+                if href:
+                    if href.startswith("/"):
+                        href = f"{AIRBNB_BASE_URL}{href}"
+                    return href
+                element.click()
+                page.wait_for_load_state("networkidle", timeout=self.page_timeout_ms)
+                return page.url
+            except Exception:  # noqa: BLE001
+                continue
+
+        return None
+
+    # ------------------------------------------------------------------
+    # Internal async helpers
     # ------------------------------------------------------------------
 
     async def _run_browser(
         self, query: SearchQuery
     ) -> list[tuple[str, RawPayload]]:
         """Drive Chromium, intercept matching responses, and return results."""
+        if not _PLAYWRIGHT_AVAILABLE:
+            raise RuntimeError("playwright is not installed; cannot run browser")
+
         # Collect response objects synchronously so we avoid scheduling async
         # tasks inside the event listener (cleaner lifecycle management).
-        pending_responses: list[tuple[str, Response]] = []
+        pending_responses: list[tuple[str, Any]] = []
 
-        def _on_response(response: Response) -> None:
+        def _on_response(response: Any) -> None:
             """Synchronous listener: stash matching responses for later parsing."""
             if matches_airbnb_endpoint(response.url):
                 pending_responses.append((response.url, response))
 
-        async with async_playwright() as playwright:
+        async with async_playwright() as playwright:  # type: ignore[name-defined]
             browser = await playwright.chromium.launch(headless=self.headless)
             context = await browser.new_context(
                 user_agent=DEFAULT_USER_AGENT,
@@ -112,7 +357,7 @@ class AirbnbScraper(ScrapeProvider):
             page = await context.new_page()
 
             # Apply stealth patches before any navigation.
-            await Stealth().apply_stealth_async(page)
+            await Stealth().apply_stealth_async(page)  # type: ignore[name-defined]
 
             page.on("response", _on_response)
 

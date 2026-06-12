@@ -24,10 +24,18 @@ class Settings(BaseSettings):
     max_pages: int = 3
     request_delay_min: float = 1.0
     request_delay_max: float = 3.0
+    # rate_limit_* are aliases kept in sync with request_delay_* for tests
+    rate_limit_min_seconds: float = 1.0
+    rate_limit_max_seconds: float = 3.0
     scraper_api_key: str = ""
 
     # Extraction
     batch_threshold: int = 10  # use Batches API above this many scrapes
+
+    # claude-opus-4-8 pricing in USD per million tokens (MTok)
+    CLAUDE_OPUS_4_8_INPUT_PRICE_PER_MTOK: float = 15.0
+    CLAUDE_OPUS_4_8_OUTPUT_PRICE_PER_MTOK: float = 75.0
+    CLAUDE_OPUS_4_8_CACHE_READ_PRICE_PER_MTOK: float = 1.50
 
     @property
     def db_url(self) -> str:

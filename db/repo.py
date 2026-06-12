@@ -12,9 +12,49 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
+from sqlalchemy import create_engine, event, func
+from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
 
-from db.models import Listing, ListingSnapshot, SearchRun
+from config import settings
+from db.models import Base, ExtractionLog, Listing, ListingSnapshot, RawScrape, SearchRun
+
+
+# ---------------------------------------------------------------------------
+# Engine / table-creation helpers
+# ---------------------------------------------------------------------------
+
+
+def get_engine(database_url: str | None = None) -> Engine:
+    """Return a SQLAlchemy engine.
+
+    If *database_url* is not provided the application config (``settings.db_url``)
+    is used.  For SQLite databases the engine is configured with WAL mode and
+    foreign-key enforcement so tests behave like production.
+    """
+    url = database_url if database_url is not None else settings.db_url
+    connect_args: dict = {}
+    if url.startswith("sqlite"):
+        connect_args = {"check_same_thread": False}
+
+    engine = create_engine(url, connect_args=connect_args, echo=False)
+
+    if url.startswith("sqlite"):
+        @event.listens_for(engine, "connect")
+        def _set_sqlite_pragmas(dbapi_conn, _record):  # noqa: ANN001
+            cursor = dbapi_conn.cursor()
+            cursor.execute("PRAGMA foreign_keys=ON")
+            cursor.execute("PRAGMA journal_mode=WAL")
+            cursor.close()
+
+    return engine
+
+
+def create_all(engine: Engine | None = None) -> None:
+    """Create all ORM-declared tables in *engine* (no-op if they already exist)."""
+    if engine is None:
+        engine = get_engine()
+    Base.metadata.create_all(engine)
 
 # ---------------------------------------------------------------------------
 # Fields that may change between scrapes and should be refreshed on upsert.
@@ -167,3 +207,119 @@ def create_listing_snapshot(
     session.add(snapshot)
     session.flush()
     return snapshot
+
+
+# ---------------------------------------------------------------------------
+# RawScrape helpers
+# ---------------------------------------------------------------------------
+
+
+def create_raw_scrape(
+    session: Session,
+    source: str,
+    url: str,
+    payload: str,
+    *,
+    run_id: int | None = None,
+    status: str = "pending",
+    page_number: int | None = None,
+) -> RawScrape | None:
+    """Persist a raw captured payload and return the new :class:`RawScrape` row.
+
+    Returns ``None`` if a row with the same content hash already exists
+    (idempotent duplicate skip).
+    """
+    content_hash = RawScrape.compute_hash(payload)
+    # Pre-check avoids a partial rollback that would discard other pending work.
+    existing = session.query(RawScrape).filter_by(content_hash=content_hash).first()
+    if existing is not None:
+        return None
+    row = RawScrape(
+        run_id=run_id,
+        source=source,
+        url=url,
+        payload=payload,
+        content_hash=content_hash,
+        status=status,
+        page_number=page_number,
+    )
+    session.add(row)
+    session.flush()
+    return row
+
+
+def get_raw_scrapes(
+    session: Session,
+    *,
+    run_id: int | None = None,
+    source: str | None = None,
+    status: str | None = None,
+) -> list[RawScrape]:
+    """Return :class:`RawScrape` rows, optionally filtered, ordered by id."""
+    q = session.query(RawScrape)
+    if run_id is not None:
+        q = q.filter(RawScrape.run_id == run_id)
+    if source is not None:
+        q = q.filter(RawScrape.source == source)
+    if status is not None:
+        q = q.filter(RawScrape.status == status)
+    return q.order_by(RawScrape.id).all()
+
+
+# ---------------------------------------------------------------------------
+# Run-history cost rollup
+# ---------------------------------------------------------------------------
+
+
+def get_all_runs_with_cost(session: Session) -> list[dict[str, Any]]:
+    """Return all :class:`SearchRun` rows ordered by ``started_at`` descending.
+
+    Each dict is enriched with aggregated token counts from
+    :class:`ExtractionLog` rows and an estimated cost using the claude-opus-4-8
+    prices from ``config.settings``.
+
+    Runs with no extraction logs produce ``estimated_cost_usd = 0.0``.
+    """
+    input_price = settings.CLAUDE_OPUS_4_8_INPUT_PRICE_PER_MTOK
+    output_price = settings.CLAUDE_OPUS_4_8_OUTPUT_PRICE_PER_MTOK
+    cache_read_price = settings.CLAUDE_OPUS_4_8_CACHE_READ_PRICE_PER_MTOK
+
+    rows = (
+        session.query(
+            SearchRun,
+            func.coalesce(func.sum(ExtractionLog.input_tokens), 0).label("total_input"),
+            func.coalesce(func.sum(ExtractionLog.output_tokens), 0).label("total_output"),
+            func.coalesce(func.sum(ExtractionLog.cache_read_tokens), 0).label("total_cache_read"),
+        )
+        .outerjoin(RawScrape, RawScrape.run_id == SearchRun.id)
+        .outerjoin(ExtractionLog, ExtractionLog.raw_scrape_id == RawScrape.id)
+        .group_by(SearchRun.id)
+        .order_by(SearchRun.started_at.desc())
+        .all()
+    )
+
+    results: list[dict[str, Any]] = []
+    for run, total_input, total_output, total_cache_read in rows:
+        estimated_cost = (
+            total_input * input_price
+            + total_output * output_price
+            + total_cache_read * cache_read_price
+        ) / 1_000_000
+
+        listing_count: int = (run.stats or {}).get("listing_count", 0)
+
+        results.append(
+            {
+                "id": run.id,
+                "area_query": run.area_query,
+                "started_at": run.started_at,
+                "status": run.status,
+                "listing_count": listing_count,
+                "estimated_cost_usd": estimated_cost,
+                "total_input_tokens": int(total_input),
+                "total_output_tokens": int(total_output),
+                "total_cache_read_tokens": int(total_cache_read),
+            }
+        )
+
+    return results
