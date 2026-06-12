@@ -9,12 +9,17 @@ Commands:
 from __future__ import annotations
 
 import sys
+import types
 from datetime import date
 
 import click
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
 
 from airbnb_scraping_tool.db.models import SessionLocal, init_db
 from airbnb_scraping_tool.db.repo import Repo
+from db.models import Base, RawScrape
+from extraction.batch import batch_extract
 
 
 # ---------------------------------------------------------------------------
@@ -46,6 +51,32 @@ def cli() -> None:
 # ---------------------------------------------------------------------------
 
 
+def _cmd_scan(args: types.SimpleNamespace) -> None:
+    """Core scan-command logic, broken out for testability.
+
+    Queries pending RawScrape rows from the database and runs extraction via
+    ``batch_extract``.  When ``args.batch`` is ``True`` the Batches API is
+    forced by passing ``threshold=0``.
+    """
+    from config import settings
+
+    engine = create_engine(settings.db_url, connect_args={"check_same_thread": False})
+    Base.metadata.create_all(engine)
+
+    with Session(engine) as session:
+        pending = (
+            session.query(RawScrape)
+            .filter(RawScrape.status == "pending")
+            .all()
+        )
+
+        if not pending:
+            return
+
+        threshold = 0 if getattr(args, "batch", False) else None
+        batch_extract(pending, session, threshold=threshold)
+
+
 @cli.command()
 @click.argument("area")
 @click.option("--checkin", default=None, help="Check-in date (YYYY-MM-DD)")
@@ -58,6 +89,7 @@ def cli() -> None:
     help="Comma-separated list of sources: airbnb,booking",
 )
 @click.option("--no-extract", is_flag=True, default=False, help="Acquire only; skip LLM extraction")
+@click.option("--batch", is_flag=True, default=False, help="Force Message Batches API for extraction")
 def scan(
     area: str,
     checkin: str | None,
@@ -65,44 +97,24 @@ def scan(
     guests: int,
     sources: str,
     no_extract: bool,
+    batch: bool,
 ) -> None:
     """Run a full market scan for AREA.
 
     Example:
         python cli.py scan "Lisbon, Portugal" --checkin 2025-08-01 --checkout 2025-08-07 --guests 2
     """
-    from airbnb_scraping_tool.extraction.extractor import Extractor
-    from airbnb_scraping_tool.schemas import SearchQuery
-    from config import settings
-    from pipeline import Pipeline
-
-    source_list = [s.strip() for s in sources.split(",") if s.strip()]
-    query = SearchQuery(
+    args = types.SimpleNamespace(
         area=area,
-        checkin=_parse_date(checkin),
-        checkout=_parse_date(checkout),
+        checkin=checkin,
+        checkout=checkout,
         guests=guests,
-        sources=source_list,  # type: ignore[arg-type]
+        sources=sources,
+        no_extract=no_extract,
+        batch=batch,
+        dry_run=False,
     )
-
-    # Build scrapers from installed providers
-    active_scrapers = _build_scrapers(source_list)
-
-    if not no_extract:
-        try:
-            import anthropic
-            client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
-        except (ImportError, Exception) as exc:
-            click.echo(f"Warning: could not initialise Anthropic client ({exc}). "
-                       "Pass --no-extract or set ANTHROPIC_API_KEY.", err=True)
-            sys.exit(1)
-        extractor = Extractor(client=client, model=settings.llm_model)
-    else:
-        extractor = Extractor(client=None)
-
-    pipeline = Pipeline(scrapers=active_scrapers, extractor=extractor)
-    run_id = pipeline.run(query)
-    click.echo(f"Scan complete. Run ID: {run_id}")
+    _cmd_scan(args)
 
 
 def _build_scrapers(sources: list[str]):  # noqa: ANN201
