@@ -1,0 +1,32 @@
+{
+  "data": {
+    "presentation": {
+      "staysSearch": {
+        "results": {
+          "paginationInfo": {
+            "nextPageCursor": null,
+            "hasNextPage": false
+          },
+          "searchResults": [
+            {
+              "listing": {
+                "id": "12345678",
+                "name": "Cosy Studio in Lisbon",
+                "avgRatingA11yLabel": "4.9 out of 5",
+                "city": "Lisbon",
+                "roomType": "Entire rental unit"
+              },
+              "pricingQuote": {
+                "structuredStayDisplayPrice": {
+                  "primaryLine": {
+                    "price": "€65"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}
