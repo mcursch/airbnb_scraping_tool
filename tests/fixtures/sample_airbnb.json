@@ -1,0 +1,55 @@
+{
+  "id": "12345678",
+  "listing": {
+    "id": 12345678,
+    "name": "Cozy Studio in Lisbon Historic Centre",
+    "room_type": "Entire studio",
+    "room_type_category": "entire_home",
+    "person_capacity": 2,
+    "lat": 38.7128,
+    "lng": -9.1393,
+    "city": "Lisbon",
+    "neighborhood_overview": "Located in Baixa, steps from Praça do Comércio.",
+    "bedrooms": 0,
+    "beds": 1,
+    "bathrooms": 1.0,
+    "amenities": [
+      "Wifi",
+      "Kitchen",
+      "Air conditioning",
+      "Washer",
+      "Essentials",
+      "Hair dryer",
+      "Iron"
+    ],
+    "photos": [
+      {"url": "https://a0.muscache.com/im/pictures/12345678/photo1.jpg"},
+      {"url": "https://a0.muscache.com/im/pictures/12345678/photo2.jpg"}
+    ],
+    "listing_url": "https://www.airbnb.com/rooms/12345678",
+    "primary_host": {
+      "id": 987654,
+      "first_name": "Maria",
+      "is_superhost": true
+    },
+    "avg_rating": 4.87,
+    "reviews_count": 156,
+    "pricing_quote": {
+      "rate": {
+        "amount": 75.0,
+        "amount_formatted": "$75",
+        "currency": "USD"
+      },
+      "price_string": "$75 / night",
+      "price_items": [
+        {"amount": 525.0, "description": "7 nights"},
+        {"amount": 45.0, "description": "Cleaning fee"},
+        {"amount": 80.0, "description": "Service fee"}
+      ],
+      "total_price": {
+        "amount": 650.0,
+        "currency": "USD"
+      }
+    }
+  }
+}
