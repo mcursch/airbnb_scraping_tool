@@ -27,7 +27,8 @@ class Settings(BaseSettings):
     # rate_limit_* are aliases kept in sync with request_delay_* for tests
     rate_limit_min_seconds: float = 1.0
     rate_limit_max_seconds: float = 3.0
-    scraper_api_key: str = ""
+    SCRAPER_API_KEY: str = ""
+    FALLBACK_PROVIDER: str = "scraperapi"
 
     # Logging
     log_dir: str = "logs"

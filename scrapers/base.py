@@ -86,6 +86,11 @@ class RawScrape(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+# Alias so that callers can import ``RawPayload`` from this module.
+# ``RawScrape`` is the canonical class; ``RawPayload`` is a convenience alias.
+RawPayload = RawScrape
+
+
 class ScrapeProvider(ABC):
     """
     Common interface for all scraping back-ends.
