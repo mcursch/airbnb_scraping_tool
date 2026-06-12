@@ -1,0 +1,196 @@
+{
+  "data": {
+    "presentation": {
+      "staysSearch": {
+        "results": {
+          "searchResults": [
+            {
+              "listing": {
+                "id": "48921034",
+                "name": "Sunny Alfama apartment with river views",
+                "roomTypeCategory": "entire_home",
+                "lat": 38.7139,
+                "lng": -9.1334,
+                "city": "Lisbon",
+                "country": "Portugal",
+                "countryCode": "PT",
+                "starRating": 4.92,
+                "reviewsCount": 214,
+                "personCapacity": 4,
+                "bedroomsLabel": "2 bedrooms",
+                "bedsLabel": "2 beds",
+                "bathroomsText": "1 bath",
+                "previewAmenities": ["Wifi", "Kitchen", "Air conditioning", "Washer"],
+                "contextualPictures": [
+                  {"picture": "https://a0.muscache.com/im/pictures/miso/Hosting-48921034/original/a1b2c3d4.jpg"},
+                  {"picture": "https://a0.muscache.com/im/pictures/miso/Hosting-48921034/original/e5f6g7h8.jpg"}
+                ],
+                "listingObjType": "REGULAR",
+                "pdpUrlType": "ROOMS",
+                "urlPathname": "/rooms/48921034",
+                "hostThumbnail": "https://a0.muscache.com/im/pictures/user/abc123.jpg",
+                "isNewListing": false,
+                "isSuperhost": true,
+                "avgRatingLocalized": "4.92"
+              },
+              "pricingQuote": {
+                "structuredStayDisplayPrice": {
+                  "primaryLine": {
+                    "price": "$88",
+                    "qualifier": "night",
+                    "accessibilityLabel": "$88 per night"
+                  },
+                  "secondaryLine": {
+                    "price": "$616 total"
+                  }
+                },
+                "rate": {
+                  "amount": 88.0,
+                  "amountFormatted": "$88",
+                  "currency": "USD",
+                  "isMicrosAccuracy": false
+                },
+                "price": {
+                  "totalPrice": {
+                    "amount": 616.0,
+                    "currency": "USD"
+                  }
+                },
+                "canInstantBook": true,
+                "monthlyPriceFactor": 0.75,
+                "weeklyPriceFactor": 0.9
+              }
+            },
+            {
+              "listing": {
+                "id": "52304871",
+                "name": "Bairro Alto cosy studio — heart of Lisbon",
+                "roomTypeCategory": "entire_home",
+                "lat": 38.7115,
+                "lng": -9.1421,
+                "city": "Lisbon",
+                "country": "Portugal",
+                "countryCode": "PT",
+                "starRating": 4.75,
+                "reviewsCount": 89,
+                "personCapacity": 2,
+                "bedroomsLabel": "Studio",
+                "bedsLabel": "1 bed",
+                "bathroomsText": "1 bath",
+                "previewAmenities": ["Wifi", "Kitchen", "Self check-in"],
+                "contextualPictures": [
+                  {"picture": "https://a0.muscache.com/im/pictures/miso/Hosting-52304871/original/q1w2e3r4.jpg"}
+                ],
+                "listingObjType": "REGULAR",
+                "pdpUrlType": "ROOMS",
+                "urlPathname": "/rooms/52304871",
+                "hostThumbnail": "https://a0.muscache.com/im/pictures/user/def456.jpg",
+                "isNewListing": false,
+                "isSuperhost": false,
+                "avgRatingLocalized": "4.75"
+              },
+              "pricingQuote": {
+                "structuredStayDisplayPrice": {
+                  "primaryLine": {
+                    "price": "$62",
+                    "qualifier": "night",
+                    "accessibilityLabel": "$62 per night"
+                  },
+                  "secondaryLine": {
+                    "price": "$434 total"
+                  }
+                },
+                "rate": {
+                  "amount": 62.0,
+                  "amountFormatted": "$62",
+                  "currency": "USD",
+                  "isMicrosAccuracy": false
+                },
+                "price": {
+                  "totalPrice": {
+                    "amount": 434.0,
+                    "currency": "USD"
+                  }
+                },
+                "canInstantBook": false,
+                "monthlyPriceFactor": 0.8,
+                "weeklyPriceFactor": 0.92
+              }
+            },
+            {
+              "listing": {
+                "id": "61840293",
+                "name": "Modern loft near Parque das Nações",
+                "roomTypeCategory": "entire_home",
+                "lat": 38.7682,
+                "lng": -9.0955,
+                "city": "Lisbon",
+                "country": "Portugal",
+                "countryCode": "PT",
+                "starRating": 4.88,
+                "reviewsCount": 47,
+                "personCapacity": 6,
+                "bedroomsLabel": "3 bedrooms",
+                "bedsLabel": "3 beds",
+                "bathroomsText": "2 baths",
+                "previewAmenities": ["Wifi", "Kitchen", "Free parking", "Pool", "Air conditioning"],
+                "contextualPictures": [
+                  {"picture": "https://a0.muscache.com/im/pictures/miso/Hosting-61840293/original/t5y6u7i8.jpg"},
+                  {"picture": "https://a0.muscache.com/im/pictures/miso/Hosting-61840293/original/o9p0a1s2.jpg"},
+                  {"picture": "https://a0.muscache.com/im/pictures/miso/Hosting-61840293/original/d3f4g5h6.jpg"}
+                ],
+                "listingObjType": "REGULAR",
+                "pdpUrlType": "ROOMS",
+                "urlPathname": "/rooms/61840293",
+                "hostThumbnail": "https://a0.muscache.com/im/pictures/user/ghi789.jpg",
+                "isNewListing": true,
+                "isSuperhost": true,
+                "avgRatingLocalized": "4.88"
+              },
+              "pricingQuote": {
+                "structuredStayDisplayPrice": {
+                  "primaryLine": {
+                    "price": "$145",
+                    "qualifier": "night",
+                    "accessibilityLabel": "$145 per night"
+                  },
+                  "secondaryLine": {
+                    "price": "$1,015 total"
+                  }
+                },
+                "rate": {
+                  "amount": 145.0,
+                  "amountFormatted": "$145",
+                  "currency": "USD",
+                  "isMicrosAccuracy": false
+                },
+                "price": {
+                  "totalPrice": {
+                    "amount": 1015.0,
+                    "currency": "USD"
+                  }
+                },
+                "canInstantBook": true,
+                "monthlyPriceFactor": 0.7,
+                "weeklyPriceFactor": 0.85
+              }
+            }
+          ],
+          "paginationInfo": {
+            "nextCursor": "eyJzZWN0aW9uX29mZnNldCI6MjAsIml0ZW1zX29mZnNldCI6MjB9",
+            "hasNextPage": true,
+            "pageCursor": null,
+            "totalCount": 300
+          },
+          "loggingData": {
+            "resultType": "STAYS_SEARCH",
+            "searchSessionId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+          }
+        },
+        "paginationInfo": {
+          "totalCount": 300
+        }
+      }
+    }
+  }
+}

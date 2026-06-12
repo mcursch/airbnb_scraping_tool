@@ -1,0 +1,197 @@
+{
+  "explore_tabs": [
+    {
+      "tab_name": "homes",
+      "tab_id": "home_tab",
+      "sections": [
+        {
+          "section_type_uid": "LISTINGS_SECTION",
+          "section_id": "LISTINGS_SECTION_0",
+          "listings": [
+            {
+              "listing": {
+                "id": "34567890",
+                "name": "Elegant flat in Eixample — near Sagrada Família",
+                "listing_obj_type": "REGULAR",
+                "room_type_category": "entire_home",
+                "room_type": "Entire rental unit",
+                "lat": 41.4036,
+                "lng": 2.1744,
+                "city": "Barcelona",
+                "country": "Spain",
+                "country_code": "ES",
+                "star_rating": 4.87,
+                "reviews_count": 183,
+                "person_capacity": 4,
+                "bedrooms": 2,
+                "beds": 3,
+                "bathrooms": 1.0,
+                "amenity_ids": [1, 4, 8, 30, 33, 44, 77],
+                "preview_amenities_with_icons": [
+                  {"icon": "wifi", "text": "Wifi"},
+                  {"icon": "kitchen", "text": "Kitchen"},
+                  {"icon": "ac", "text": "Air conditioning"},
+                  {"icon": "washer", "text": "Washer"}
+                ],
+                "picture_url": "https://a0.muscache.com/im/pictures/34567890/photo1.jpg",
+                "picture_urls": [
+                  "https://a0.muscache.com/im/pictures/34567890/photo1.jpg",
+                  "https://a0.muscache.com/im/pictures/34567890/photo2.jpg"
+                ],
+                "user": {
+                  "id": 9988776,
+                  "first_name": "María",
+                  "is_superhost": true,
+                  "thumbnail_url": "https://a0.muscache.com/im/pictures/user/maria.jpg"
+                },
+                "url": "/rooms/34567890",
+                "is_new_listing": false,
+                "avg_rating": 4.87
+              },
+              "pricing_quote": {
+                "can_instant_book": true,
+                "rate": {
+                  "amount": 79.0,
+                  "amount_formatted": "$79",
+                  "currency": "USD",
+                  "is_micros_accuracy": false
+                },
+                "price_string": "$79 / night",
+                "monthly_price_factor": 0.78,
+                "weekly_price_factor": 0.9,
+                "formatted_display_price": "$79",
+                "formatted_display_total": "$553 total"
+              }
+            },
+            {
+              "listing": {
+                "id": "29104583",
+                "name": "Beachfront room in Barceloneta",
+                "listing_obj_type": "REGULAR",
+                "room_type_category": "private_room",
+                "room_type": "Private room in rental unit",
+                "lat": 41.3797,
+                "lng": 2.1908,
+                "city": "Barcelona",
+                "country": "Spain",
+                "country_code": "ES",
+                "star_rating": 4.61,
+                "reviews_count": 320,
+                "person_capacity": 2,
+                "bedrooms": 1,
+                "beds": 1,
+                "bathrooms": 1.0,
+                "amenity_ids": [1, 4, 77],
+                "preview_amenities_with_icons": [
+                  {"icon": "wifi", "text": "Wifi"},
+                  {"icon": "breakfast", "text": "Breakfast included"}
+                ],
+                "picture_url": "https://a0.muscache.com/im/pictures/29104583/photo1.jpg",
+                "picture_urls": [
+                  "https://a0.muscache.com/im/pictures/29104583/photo1.jpg"
+                ],
+                "user": {
+                  "id": 1122334,
+                  "first_name": "Carlos",
+                  "is_superhost": false,
+                  "thumbnail_url": "https://a0.muscache.com/im/pictures/user/carlos.jpg"
+                },
+                "url": "/rooms/29104583",
+                "is_new_listing": false,
+                "avg_rating": 4.61
+              },
+              "pricing_quote": {
+                "can_instant_book": true,
+                "rate": {
+                  "amount": 38.0,
+                  "amount_formatted": "$38",
+                  "currency": "USD",
+                  "is_micros_accuracy": false
+                },
+                "price_string": "$38 / night",
+                "monthly_price_factor": 0.85,
+                "weekly_price_factor": 0.95,
+                "formatted_display_price": "$38",
+                "formatted_display_total": "$266 total"
+              }
+            },
+            {
+              "listing": {
+                "id": "73920156",
+                "name": "Rooftop penthouse with panoramic city views",
+                "listing_obj_type": "REGULAR",
+                "room_type_category": "entire_home",
+                "room_type": "Entire rental unit",
+                "lat": 41.3851,
+                "lng": 2.1734,
+                "city": "Barcelona",
+                "country": "Spain",
+                "country_code": "ES",
+                "star_rating": 4.96,
+                "reviews_count": 72,
+                "person_capacity": 8,
+                "bedrooms": 4,
+                "beds": 4,
+                "bathrooms": 3.0,
+                "amenity_ids": [1, 4, 8, 30, 33, 44, 55, 77, 88],
+                "preview_amenities_with_icons": [
+                  {"icon": "wifi", "text": "Wifi"},
+                  {"icon": "pool", "text": "Rooftop pool"},
+                  {"icon": "ac", "text": "Air conditioning"},
+                  {"icon": "kitchen", "text": "Kitchen"},
+                  {"icon": "parking", "text": "Free parking"}
+                ],
+                "picture_url": "https://a0.muscache.com/im/pictures/73920156/photo1.jpg",
+                "picture_urls": [
+                  "https://a0.muscache.com/im/pictures/73920156/photo1.jpg",
+                  "https://a0.muscache.com/im/pictures/73920156/photo2.jpg",
+                  "https://a0.muscache.com/im/pictures/73920156/photo3.jpg"
+                ],
+                "user": {
+                  "id": 5566778,
+                  "first_name": "Ana",
+                  "is_superhost": true,
+                  "thumbnail_url": "https://a0.muscache.com/im/pictures/user/ana.jpg"
+                },
+                "url": "/rooms/73920156",
+                "is_new_listing": true,
+                "avg_rating": 4.96
+              },
+              "pricing_quote": {
+                "can_instant_book": false,
+                "rate": {
+                  "amount": 290.0,
+                  "amount_formatted": "$290",
+                  "currency": "USD",
+                  "is_micros_accuracy": false
+                },
+                "price_string": "$290 / night",
+                "monthly_price_factor": 0.65,
+                "weekly_price_factor": 0.8,
+                "formatted_display_price": "$290",
+                "formatted_display_total": "$2,030 total"
+              }
+            }
+          ]
+        }
+      ],
+      "pagination_metadata": {
+        "items_per_grid": 20,
+        "cursor_based_pagination": true,
+        "next_cursor": "bGlzdGluZ3NfY3Vyc29yOnsiY3Vyc29yIjoiMjAifQ==",
+        "has_next_page": true
+      }
+    }
+  ],
+  "metadata": {
+    "currency": "USD",
+    "locale": "en",
+    "geography": {
+      "city": "Barcelona",
+      "country": "Spain",
+      "lat": 41.3851,
+      "lng": 2.1734
+    },
+    "listings_count": 300
+  }
+}
