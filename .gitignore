@@ -1,3 +1,6 @@
+# Log files
+logs/*.jsonl
+
 __pycache__/
 *.pyc
 *.pyo
