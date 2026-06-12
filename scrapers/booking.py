@@ -107,6 +107,7 @@ import random
 import time
 from datetime import datetime, timezone
 from typing import Any, Optional
+from urllib.parse import urlencode
 
 import httpx
 from bs4 import BeautifulSoup
@@ -210,7 +211,7 @@ class BookingScraper(ScrapeProvider):
         if query.checkout:
             params.append(("checkout", query.checkout))
 
-        qs = "&".join(f"{k}={v}" for k, v in params)
+        qs = urlencode(params)
         return f"{SEARCH_URL}?{qs}"
 
     # ------------------------------------------------------------------
@@ -278,7 +279,7 @@ class BookingScraper(ScrapeProvider):
             When the rendered page is still blocked.
         """
         try:
-            from playwright.sync_api import sync_playwright  # type: ignore[import]
+            from playwright.sync_api import sync_playwright
         except ImportError as exc:
             raise RuntimeError(
                 "playwright is not installed; run: uv run playwright install chromium"
@@ -343,7 +344,7 @@ class BookingScraper(ScrapeProvider):
         if self._session is None:
             return
         try:
-            from db.models import RawScrapeRow  # type: ignore[import]
+            from db.models import RawScrapeRow  # type: ignore[import-untyped]
 
             row = RawScrapeRow(
                 source=raw.source,
