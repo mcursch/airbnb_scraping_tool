@@ -3,7 +3,7 @@ name = "airbnb-scraping-tool"
 version = "0.1.0"
 description = "Short-Stay Market Scanner: scrapes Airbnb and hotel listings, extracts structured data via Claude, and presents results in a Streamlit dashboard."
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.10"
 dependencies = [
     "playwright>=1.44",
     "playwright-stealth>=1.0",

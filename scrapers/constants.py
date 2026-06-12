@@ -35,11 +35,8 @@ EXPLORE_TABS_URL_PATTERN: re.Pattern[str] = re.compile(
 )
 
 # Combined pattern: matches any Airbnb listing-search API call.
-ANY_LISTING_SEARCH_URL_PATTERN: re.Pattern[str] = re.compile(
-    r"https://www\.airbnb\.[a-z.]+/api/v[23]/"
-    r"(?:StaysSearch|explore_tabs|ExploreSearch)",
-    re.IGNORECASE,
-)
+# Alias of STAYS_SEARCH_URL_PATTERN — same scope, avoids re-compiling.
+ANY_LISTING_SEARCH_URL_PATTERN: re.Pattern[str] = STAYS_SEARCH_URL_PATTERN
 
 # Base URL for Airbnb (used for constructing listing deep-links).
 AIRBNB_BASE_URL: str = "https://www.airbnb.com"
