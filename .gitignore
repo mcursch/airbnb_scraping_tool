@@ -50,6 +50,16 @@ dist/
 build/
 *.egg-info/
 *.egg
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Distribution / packaging
+*.egg-info/
+dist/
+build/
+.eggs/
 
 # Virtual environments
 .venv/
@@ -95,3 +105,13 @@ Thumbs.db
 .env
 .pytest_cache/
 .venv/
+# Test / coverage artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Local database
+*.db
+
+# Environment files
+.env
