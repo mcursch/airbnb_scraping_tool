@@ -13,7 +13,7 @@ can be written first.
 
 from __future__ import annotations
 
-from scrapers.base import RawPayload, ScrapeProvider
+from scrapers.base import RawScrape, ScrapeProvider, SearchQuery
 
 
 class FallbackApiProvider(ScrapeProvider):
@@ -21,7 +21,7 @@ class FallbackApiProvider(ScrapeProvider):
 
     Args:
         api_key: Secret key for the scraping API service.
-        source_name: Label written into :attr:`~scrapers.base.RawPayload.source`
+        source_name: Label written into :attr:`~scrapers.base.RawScrape.source`
             for every result returned by this provider (default ``"fallback"``).
     """
 
@@ -35,7 +35,7 @@ class FallbackApiProvider(ScrapeProvider):
     # ScrapeProvider interface
     # ------------------------------------------------------------------
 
-    def search(self, query: str) -> list[RawPayload]:
+    def search(self, query: SearchQuery) -> list[RawScrape]:
         """Proxy the search through the external scraping API.
 
         Full HTTP implementation is part of Stage 2.  The method signature is
