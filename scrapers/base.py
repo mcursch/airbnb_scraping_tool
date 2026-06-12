@@ -8,6 +8,7 @@ Exports
 BlockedError      -- raised when a provider detects a CAPTCHA / IP block.
 SearchQuery       -- validated input for a scraper search call.
 RawScrape         -- record of one fetched page, persisted immediately.
+RawPayload        -- alias for RawScrape (backward-compatible convenience name).
 ScrapeProvider    -- abstract base class every scraper must implement.
 """
 

@@ -1,3 +1,3 @@
-{"ts": "2026-06-12T19:21:13.579670+00:00", "level": "INFO", "msg": "Run started", "run_id": 2, "area": "Lisbon"}
-{"ts": "2026-06-12T19:21:13.580839+00:00", "level": "INFO", "msg": "Listing extracted", "url": "https://airbnb.com/rooms/abc123", "is_new": false, "was_updated": true, "tokens": 70}
-{"ts": "2026-06-12T19:21:13.581183+00:00", "level": "INFO", "msg": "Run complete", "run_id": 2, "status": "done", "total_listings": 1, "new": 0, "updated": 1, "dedup_hits": 0, "total_tokens": 70, "estimated_cost_usd": 0.00075}
+{"ts": "2026-06-12T19:24:41.890793+00:00", "level": "INFO", "msg": "Run started", "run_id": 2, "area": "Lisbon"}
+{"ts": "2026-06-12T19:24:41.892079+00:00", "level": "INFO", "msg": "Listing extracted", "url": "https://airbnb.com/rooms/abc123", "is_new": false, "was_updated": true, "tokens": 70}
+{"ts": "2026-06-12T19:24:41.892497+00:00", "level": "INFO", "msg": "Run complete", "run_id": 2, "status": "done", "total_listings": 1, "new": 0, "updated": 1, "dedup_hits": 0, "total_tokens": 70, "estimated_cost_usd": 0.00075}
