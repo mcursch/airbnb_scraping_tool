@@ -25,7 +25,7 @@ import logging
 import pytest
 
 from pipeline import run_acquire
-from scrapers.base import BlockedError, RawPayload, ScrapeProvider
+from scrapers.base import BlockedError, RawScrape, ScrapeProvider, SearchQuery
 
 
 # ---------------------------------------------------------------------------
@@ -43,8 +43,8 @@ class AlwaysBlockedScraper(ScrapeProvider):
     def __init__(self, reason: str = "bot detection triggered") -> None:
         self._reason = reason
 
-    def search(self, query: str) -> list[RawPayload]:  # noqa: ARG002
-        raise BlockedError(self._reason)
+    def search(self, query: SearchQuery) -> list[RawScrape]:  # noqa: ARG002
+        raise BlockedError(url="", reason=self._reason)
 
 
 class MockFallbackProvider(ScrapeProvider):
@@ -54,22 +54,22 @@ class MockFallbackProvider(ScrapeProvider):
     on the call count and the forwarded query string.
     """
 
-    def __init__(self, payloads: list[RawPayload] | None = None) -> None:
-        self.calls: list[str] = []
-        self._payloads: list[RawPayload] = payloads or [
-            RawPayload(
+    def __init__(self, payloads: list[RawScrape] | None = None) -> None:
+        self.calls: list[SearchQuery] = []
+        self._payloads: list[RawScrape] = payloads or [
+            RawScrape(
                 source="fallback",
                 url="https://api.example.com/results/1",
                 payload='{"title": "Cosy Studio", "price": 85}',
             ),
-            RawPayload(
+            RawScrape(
                 source="fallback",
                 url="https://api.example.com/results/2",
                 payload='{"title": "City Centre Flat", "price": 120}',
             ),
         ]
 
-    def search(self, query: str) -> list[RawPayload]:
+    def search(self, query: SearchQuery) -> list[RawScrape]:
         self.calls.append(query)
         return self._payloads
 
@@ -97,14 +97,15 @@ class TestFallbackEngaged:
         assert all(r.source == "fallback" for r in results)
 
     def test_fallback_called_with_original_query(self) -> None:
-        """The fallback receives the same query string as the primary scraper."""
+        """The fallback receives a SearchQuery whose area matches the original string."""
         query = "Tokyo, Japan"
         scraper = AlwaysBlockedScraper()
         fallback = MockFallbackProvider()
 
         run_acquire(query, providers=[scraper], fallback_provider=fallback)
 
-        assert fallback.calls == [query]
+        assert len(fallback.calls) == 1
+        assert fallback.calls[0].area == query
 
     def test_fallback_called_once_per_blocked_provider(self) -> None:
         """With two blocked primary scrapers, the fallback is called twice."""
@@ -125,8 +126,8 @@ class TestFallbackEngaged:
         """Results from an unblocked primary provider are not discarded."""
 
         class GoodScraper(ScrapeProvider):
-            def search(self, query: str) -> list[RawPayload]:  # noqa: ARG002
-                return [RawPayload(source="direct", url="https://direct.example.com", payload="{}")]
+            def search(self, query: SearchQuery) -> list[RawScrape]:  # noqa: ARG002
+                return [RawScrape(source="direct", url="https://direct.example.com", payload="{}")]
 
         fallback = MockFallbackProvider()
         providers = [GoodScraper(), AlwaysBlockedScraper()]
@@ -194,8 +195,8 @@ class TestNoFallbackDegradation:
         """A working provider's results survive even when another provider is blocked."""
 
         class GoodScraper(ScrapeProvider):
-            def search(self, query: str) -> list[RawPayload]:  # noqa: ARG002
-                return [RawPayload(source="direct", url="https://ok.example.com", payload="{}")]
+            def search(self, query: SearchQuery) -> list[RawScrape]:  # noqa: ARG002
+                return [RawScrape(source="direct", url="https://ok.example.com", payload="{}")]
 
         providers = [GoodScraper(), AlwaysBlockedScraper()]
 

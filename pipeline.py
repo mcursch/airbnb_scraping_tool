@@ -11,7 +11,7 @@ from __future__ import annotations
 import logging
 from typing import Sequence
 
-from scrapers.base import BlockedError, RawPayload, ScrapeProvider
+from scrapers.base import BlockedError, RawScrape, ScrapeProvider, SearchQuery
 
 logger = logging.getLogger(__name__)
 
@@ -20,11 +20,11 @@ def run_acquire(
     query: str,
     providers: Sequence[ScrapeProvider],
     fallback_provider: ScrapeProvider | None = None,
-) -> list[RawPayload]:
+) -> list[RawScrape]:
     """Run the acquire stage for *query* across every provider in *providers*.
 
-    For each provider the method calls ``provider.search(query)`` and
-    accumulates the returned :class:`~scrapers.base.RawPayload` objects.
+    For each provider the method calls ``provider.search(SearchQuery(area=query))``
+    and accumulates the returned :class:`~scrapers.base.RawScrape` objects.
     When a provider raises :exc:`~scrapers.base.BlockedError` the method
     behaves as follows:
 
@@ -37,7 +37,7 @@ def run_acquire(
       gracefully; no exception propagates to the caller.
 
     Any exception *other* than :exc:`~scrapers.base.BlockedError` is not
-    caught and propagates normally — unexpected errors should not be silenced.
+    caught and propagates normally -- unexpected errors should not be silenced.
 
     Args:
         query: Human-readable location / keyword string (e.g.
@@ -48,16 +48,16 @@ def run_acquire(
             configured.
 
     Returns:
-        Flat list of :class:`~scrapers.base.RawPayload` objects collected from
-        all providers (and the fallback where used).  Ready to be persisted as
-        ``RawScrape`` database rows.
+        Flat list of :class:`~scrapers.base.RawScrape` objects collected from
+        all providers (and the fallback where used).
     """
-    results: list[RawPayload] = []
+    search_query = SearchQuery(area=query)
+    results: list[RawScrape] = []
 
     for provider in providers:
         provider_name = type(provider).__name__
         try:
-            raw = provider.search(query)
+            raw = provider.search(search_query)
             results.extend(raw)
             logger.debug(
                 "Provider %s returned %d payload(s) for query %r",
@@ -81,7 +81,7 @@ def run_acquire(
                         "query": query,
                     },
                 )
-                raw = fallback_provider.search(query)
+                raw = fallback_provider.search(search_query)
                 results.extend(raw)
                 logger.debug(
                     "Fallback provider %s returned %d payload(s)",
