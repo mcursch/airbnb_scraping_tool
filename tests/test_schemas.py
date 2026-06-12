@@ -38,15 +38,15 @@ CHECKOUT = date(2024, 7, 5)
 
 class TestSearchQuery:
     def test_valid_minimal(self):
-        q = SearchQuery(area_query="Lisbon, Portugal")
-        assert q.area_query == "Lisbon, Portugal"
+        q = SearchQuery(area="Lisbon, Portugal")
+        assert q.area == "Lisbon, Portugal"
         assert q.checkin is None
         assert q.guests is None
         assert q.sources == ["airbnb"]
 
     def test_valid_full(self):
         q = SearchQuery(
-            area_query="Paris",
+            area="Paris",
             checkin=CHECKIN,
             checkout=CHECKOUT,
             guests=2,
@@ -57,30 +57,30 @@ class TestSearchQuery:
 
     def test_invalid_empty_area(self):
         with pytest.raises(ValidationError):
-            SearchQuery(area_query="")
+            SearchQuery(area="")
 
     def test_invalid_guests_zero(self):
         with pytest.raises(ValidationError):
-            SearchQuery(area_query="Lisbon", guests=0)
+            SearchQuery(area="Lisbon", guests=0)
 
     def test_invalid_guests_string(self):
         with pytest.raises(ValidationError):
-            SearchQuery(area_query="Lisbon", guests="two")  # type: ignore[arg-type]
+            SearchQuery(area="Lisbon", guests="two")  # type: ignore[arg-type]
 
     def test_checkout_before_checkin_raises(self):
         with pytest.raises(ValidationError):
             SearchQuery(
-                area_query="Lisbon",
+                area="Lisbon",
                 checkin=CHECKOUT,
                 checkout=CHECKIN,
             )
 
     def test_checkout_same_as_checkin_raises(self):
         with pytest.raises(ValidationError):
-            SearchQuery(area_query="Lisbon", checkin=CHECKIN, checkout=CHECKIN)
+            SearchQuery(area="Lisbon", checkin=CHECKIN, checkout=CHECKIN)
 
     def test_round_trip_json(self):
-        q = SearchQuery(area_query="Lisbon", checkin=CHECKIN, checkout=CHECKOUT, guests=3)
+        q = SearchQuery(area="Lisbon", checkin=CHECKIN, checkout=CHECKOUT, guests=3)
         restored = SearchQuery.model_validate_json(q.model_dump_json())
         assert restored == q
 

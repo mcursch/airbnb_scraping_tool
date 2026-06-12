@@ -26,7 +26,7 @@ Source = Literal["airbnb", "booking", "other"]
 class SearchQuery(BaseModel):
     """Input parameters for a single short-stay market scan."""
 
-    area_query: str = Field(..., min_length=1, description="Free-text area / city query")
+    area: str = Field(..., min_length=1, description="Free-text area / city query")
     checkin: Optional[date] = Field(None, description="Check-in date (ISO 8601)")
     checkout: Optional[date] = Field(None, description="Check-out date (ISO 8601)")
     guests: Optional[int] = Field(None, ge=1, description="Number of guests (≥1)")

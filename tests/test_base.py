@@ -31,7 +31,7 @@ class TestScrapeProviderIsAbstract:
             def search(self, query: SearchQuery) -> list[RawPayload]:
                 return []
 
-        query = SearchQuery(area_query="Lisbon, Portugal")
+        query = SearchQuery(area="Lisbon, Portugal")
         provider = DummyProvider()
         result = provider.search(query)
         assert result == []
@@ -39,7 +39,7 @@ class TestScrapeProviderIsAbstract:
 
 class TestSearchQuery:
     def test_defaults(self):
-        q = SearchQuery(area_query="Paris, France")
+        q = SearchQuery(area="Paris, France")
         assert q.checkin is None
         assert q.checkout is None
         assert q.guests is None
@@ -49,13 +49,13 @@ class TestSearchQuery:
         import datetime
 
         q = SearchQuery(
-            area_query="Rome",
+            area="Rome",
             checkin=datetime.date(2026, 7, 1),
             checkout=datetime.date(2026, 7, 7),
             guests=2,
             sources=["airbnb"],
         )
-        assert q.area_query == "Rome"
+        assert q.area == "Rome"
         assert q.guests == 2
         assert q.sources == ["airbnb"]
 
