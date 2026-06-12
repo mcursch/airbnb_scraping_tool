@@ -119,7 +119,7 @@ def extract_listings(
                         ),
                     }
                 ],
-                response_format=ListingExtraction,
+                output_format=ListingExtraction,
             )
 
             extraction: ListingExtraction = response.parsed
@@ -130,7 +130,7 @@ def extract_listings(
                 model=MODEL,
                 input_tokens=getattr(usage, "input_tokens", None),
                 output_tokens=getattr(usage, "output_tokens", None),
-                cache_read_tokens=getattr(usage, "cache_read_input_tokens", None),
+                cache_read_input_tokens=getattr(usage, "cache_read_input_tokens", None),
                 status="success",
             )
             session.add(log)

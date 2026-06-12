@@ -6,6 +6,7 @@ lightweight stub so no real API calls are made.
 """
 from __future__ import annotations
 
+import inspect
 import json
 import pathlib
 from typing import Any
@@ -222,8 +223,8 @@ class TestPromptCaching:
 
         logs = db_session.query(ExtractionLog).order_by(ExtractionLog.id).all()
         assert len(logs) == 2
-        assert logs[0].cache_read_tokens == 0
-        assert logs[1].cache_read_tokens == 512
+        assert logs[0].cache_read_input_tokens == 0
+        assert logs[1].cache_read_input_tokens == 512
 
     def test_cache_read_tokens_stored_on_success_log(self, db_session: Session) -> None:
         payload = _load_fixture("sample_airbnb.json")
@@ -235,7 +236,7 @@ class TestPromptCaching:
         extract_listings([scrape], db_session, client=mock_client)
 
         log = db_session.query(ExtractionLog).one()
-        assert log.cache_read_tokens == 1024
+        assert log.cache_read_input_tokens == 1024
 
 
 class TestErrorHandling:
@@ -329,6 +330,20 @@ class TestErrorHandling:
         assert results == []
         db_session.refresh(scrape)
         assert scrape.status == "failed"
+
+
+class TestSDKSignature:
+    """Smoke-test that guards against future SDK renames of output_format."""
+
+    def test_messages_parse_accepts_output_format(self) -> None:
+        """Confirm the real SDK's messages.parse() accepts output_format kwarg."""
+        import anthropic
+
+        client = anthropic.Anthropic(api_key="smoke-test-key")
+        assert "output_format" in inspect.signature(client.messages.parse).parameters, (
+            "anthropic SDK no longer has output_format in messages.parse(); "
+            "check for a renamed parameter and update extractor.py"
+        )
 
 
 class TestPretrim:
