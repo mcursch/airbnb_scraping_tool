@@ -66,6 +66,11 @@ class Extractor:
         self._client = client
         self._model = model
 
+    @property
+    def model(self) -> str:
+        """The model identifier used for extraction calls."""
+        return self._model
+
     def extract(self, source: str, url: str, payload: str) -> ExtractionResult:
         """Extract a single raw payload into a ``ListingExtraction``.
 

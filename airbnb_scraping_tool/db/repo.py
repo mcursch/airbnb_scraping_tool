@@ -10,7 +10,7 @@ import json
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import delete, select, text
+from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -56,8 +56,10 @@ class Repo:
 
         Stats keys (also consumed by Stage 5 dashboard):
           total_listings   – total number of unique listings touched this run
+                             (equals new + updated + unchanged)
           new              – listings inserted for the first time
           updated          – existing listings whose data was refreshed
+          unchanged        – existing listings whose data was identical (no-op upsert)
           dedup_hits       – raw scrapes skipped because content_hash already existed
           total_tokens     – sum of input + output + cache_read tokens across all LLM calls
           estimated_cost_usd – approximate cost in USD (input $5/MTok, output $25/MTok,
@@ -248,6 +250,3 @@ class Repo:
         session.flush()
         return {"snapshots_deleted": snaps_deleted, "listings_deleted": listings_deleted}
 
-    def vacuum(self, session: Session) -> None:
-        """Run VACUUM on the SQLite database to reclaim free pages."""
-        session.execute(text("VACUUM"))

@@ -14,8 +14,10 @@ Orchestrates a full search run:
 
 Stats keys (also read by the Stage 5 dashboard):
     total_listings    – total unique listings touched this run
+                        (equals new + updated + unchanged)
     new               – listings inserted for the first time
     updated           – existing listings whose fields were refreshed
+    unchanged         – existing listings whose data was identical (no-op upsert)
     dedup_hits        – raw scrapes skipped because content_hash already existed
     total_tokens      – cumulative input + output + cache_read tokens
     estimated_cost_usd – approximate USD cost at claude-opus-4-8 pricing
@@ -61,6 +63,7 @@ class Pipeline:
             "total_listings": 0,
             "new": 0,
             "updated": 0,
+            "unchanged": 0,
             "dedup_hits": 0,
             "total_tokens": 0,
             "estimated_cost_usd": 0.0,
@@ -152,7 +155,7 @@ class Pipeline:
         self.repo.log_extraction(
             session,
             raw_scrape_id=rs.id,
-            model=self.extractor._model,
+            model=self.extractor.model,
             input_tokens=result.input_tokens,
             output_tokens=result.output_tokens,
             cache_read_tokens=result.cache_read_tokens,
@@ -211,10 +214,13 @@ class Pipeline:
         )
 
         # Accumulate listing stats
+        # total_listings == new + updated + unchanged
         stats["total_listings"] += 1
         if is_new:
             stats["new"] += 1
         elif was_updated:
             stats["updated"] += 1
+        else:
+            stats["unchanged"] += 1
 
         session.flush()
