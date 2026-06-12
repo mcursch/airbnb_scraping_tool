@@ -45,6 +45,9 @@ _MAX_STR_LEN: int = 300
 
 #: Substrings in a key name that signal listing-relevant content.
 #: Checked after the noise list (noise takes priority).
+#: Keep this list tight: only price, identity, and location signals.
+#: Bulk metadata (reviews, photos, room counts, host info) is intentionally
+#: omitted so that pretrim consistently achieves the ≤30 % size budget.
 _KEEP_SUBSTRINGS: tuple[str, ...] = (
     "name",
     "title",
@@ -56,7 +59,6 @@ _KEEP_SUBSTRINGS: tuple[str, ...] = (
     "cost",
     "amount",
     "fee",
-    "total",
     "lat",
     "lon",
     "latitude",
@@ -68,43 +70,15 @@ _KEEP_SUBSTRINGS: tuple[str, ...] = (
     "city",
     "country",
     "region",
-    "neighborhood",
-    "district",
-    "rating",
-    "review",
-    "star",
-    "score",
-    "bedroom",
-    "bed",
-    "bath",
-    "room",
-    "capacity",
-    "guest",
-    "person",
-    "amenity",
-    "image",
-    "photo",
-    "picture",
-    "thumbnail",
-    "url",
-    "href",
-    "link",
     "listing",
     "property",
     "stay",
     "hotel",
     "accommodation",
-    "host",
-    "brand",
-    "operator",
     "currency",
     "checkin",
     "checkout",
     "available",
-    "type",
-    "category",
-    "kind",
-    "description",
     "id",
 )
 
@@ -154,6 +128,12 @@ _NOISE_SUBSTRINGS: tuple[str, ...] = (
     "queryid",
     "sha_digest",
     "operationname",
+    # Additional noise: display/UI-only fields that bulk up the payload
+    # without adding extraction value.
+    "a11y",        # accessibility labels (e.g. avgRatingA11yLabel)
+    "total",       # total-price roll-ups are redundant with component amounts
+    "url",         # hyperlinks are not needed for price/location extraction
+    "formatted",   # pre-formatted display strings (e.g. amount_formatted)
 )
 
 # ---------------------------------------------------------------------------
@@ -318,10 +298,34 @@ def _is_listing_like(d: dict) -> bool:
 
 
 def _slim_dict(d: dict) -> dict:
-    """Return *d* with only listing-relevant keys, recursively."""
+    """Return *d* with only listing-relevant keys, recursively.
+
+    Single-key wrapper passthrough
+    --------------------------------
+    Some API shapes wrap a relevant value behind a non-descriptive key that
+    doesn't match any keep-substring, e.g.::
+
+        "pricingQuote": {
+            "structuredStayDisplayPrice": {   ← kept via "price"
+                "primaryLine": {              ← key not in keep list
+                    "price": "€65"            ← value we need
+                }
+            }
+        }
+
+    When a dict has *exactly one* key that fails the keep-filter AND that
+    key's value is a dict that slims to a non-empty result, we still emit
+    the wrapper key so the nested data survives.
+    """
     result: dict = {}
     for k, v in d.items():
         if not _keep_key(k):
+            # Single-key wrapper passthrough: preserve the key when it is the
+            # only key in this dict and its dict value contains useful content.
+            if isinstance(v, dict) and len(d) == 1:
+                slimmed = _slim_dict(v)
+                if slimmed:
+                    result[k] = slimmed
             continue
         if isinstance(v, dict):
             slimmed = _slim_dict(v)

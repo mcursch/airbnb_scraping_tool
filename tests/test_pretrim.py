@@ -61,7 +61,12 @@ def _load_fixture(name: str) -> str:
 
 
 def _fixture_names() -> list[str]:
-    return [p.name for p in sorted(FIXTURES_DIR.iterdir()) if p.is_file()]
+    """Return the names of fixture data files (JSON and HTML only)."""
+    return [
+        p.name
+        for p in sorted(FIXTURES_DIR.iterdir())
+        if p.is_file() and p.suffix in {".json", ".html"}
+    ]
 
 
 # ---------------------------------------------------------------------------

@@ -14,7 +14,8 @@
                 "name": "Cosy Studio in Lisbon",
                 "avgRatingA11yLabel": "4.9 out of 5",
                 "city": "Lisbon",
-                "roomType": "Entire rental unit"
+                "roomType": "Entire rental unit",
+                "coordinate": {"latitude": 38.7168, "longitude": -9.1399}
               },
               "pricingQuote": {
                 "structuredStayDisplayPrice": {
