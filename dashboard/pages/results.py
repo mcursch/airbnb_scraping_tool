@@ -22,6 +22,14 @@ from dashboard.components.results_table import DISPLAY_COLUMNS, filter_df, load_
 from dashboard.components.map_view import render_map  # noqa: E402
 from dashboard.components.charts import render_price_histogram, render_source_comparison  # noqa: E402
 from dashboard.components.detail_panel import render_detail_panel  # noqa: E402
+from db.repo import get_engine as _get_engine  # noqa: E402
+from sqlalchemy.orm import sessionmaker as _sessionmaker  # noqa: E402
+
+
+@st.cache_resource
+def _get_cached_engine():
+    """Return a module-level cached engine so we create it only once."""
+    return _get_engine()
 
 
 def render() -> None:
@@ -160,11 +168,7 @@ def render() -> None:
 
         if selected_label:
             listing_id = listing_options[selected_label]
-            from sqlalchemy.orm import sessionmaker as _sessionmaker  # noqa: PLC0415
-            from db.repo import get_engine as _get_engine  # noqa: PLC0415
-
-            _engine = _get_engine()
-            _Session = _sessionmaker(bind=_engine)
+            _Session = _sessionmaker(bind=_get_cached_engine())
             with _Session() as session:
                 render_detail_panel(listing_id=listing_id, session=session)
 

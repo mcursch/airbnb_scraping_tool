@@ -14,7 +14,7 @@ from typing import Any
 
 from sqlalchemy import create_engine, event, func
 from sqlalchemy.engine import Engine
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 
 from config import settings
 from db.models import Base, ExtractionLog, Listing, ListingSnapshot, RawScrape, SearchRun
@@ -148,18 +148,35 @@ def record_run_stats(
 # ---------------------------------------------------------------------------
 
 
-def upsert_listing(session: Session, listing: Listing) -> Listing:
+def upsert_listing(session: Session, listing: "Listing | dict") -> "Listing":
     """Insert or update a :class:`Listing` keyed on ``(source, source_listing_id)``.
 
+    *listing* may be either a :class:`Listing` ORM instance **or** a plain
+    ``dict`` whose keys match :class:`Listing` column names (including the
+    mandatory ``"source"`` and ``"source_listing_id"`` keys).
+
     * **Insert path** — the row does not yet exist: ``first_seen_at`` and
-      ``last_seen_at`` are set to the current UTC time and the object is added
-      to the session.
+      ``last_seen_at`` are set from the supplied values, or to the current UTC
+      time when absent.
     * **Update path** — a row already exists: all :data:`_MUTABLE_LISTING_FIELDS`
       are copied from *listing* onto the existing row, and ``last_seen_at`` is
       refreshed to the current UTC time.  ``first_seen_at`` is *not* changed.
 
     Returns the persisted :class:`Listing` instance (flushed, not committed).
     """
+    if isinstance(listing, dict):
+        d = dict(listing)
+        src = d.pop("source")
+        src_id = d.pop("source_listing_id")
+        first_seen = d.pop("first_seen_at", None)
+        last_seen = d.pop("last_seen_at", None)
+        obj = Listing(source=src, source_listing_id=src_id, **d)
+        if first_seen is not None:
+            obj.first_seen_at = first_seen
+        if last_seen is not None:
+            obj.last_seen_at = last_seen
+        listing = obj
+
     now = datetime.utcnow()
 
     existing: Listing | None = (
@@ -169,8 +186,10 @@ def upsert_listing(session: Session, listing: Listing) -> Listing:
     )
 
     if existing is None:
-        listing.first_seen_at = now
-        listing.last_seen_at = now
+        if not listing.first_seen_at:
+            listing.first_seen_at = now
+        if not listing.last_seen_at:
+            listing.last_seen_at = now
         session.add(listing)
         session.flush()
         return listing
@@ -269,6 +288,137 @@ def get_raw_scrapes(
 # ---------------------------------------------------------------------------
 # Run-history cost rollup
 # ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# Listing read helpers (used by the dashboard)
+# ---------------------------------------------------------------------------
+
+
+def get_listing(session: Session, listing_id: int) -> "Listing | None":
+    """Return the :class:`Listing` with *listing_id*, or ``None``."""
+    return session.get(Listing, listing_id)
+
+
+def get_latest_snapshot(session: Session, listing_id: int) -> "ListingSnapshot | None":
+    """Return the most-recently-captured snapshot for *listing_id*, or ``None``."""
+    return (
+        session.query(ListingSnapshot)
+        .filter(ListingSnapshot.listing_id == listing_id)
+        .order_by(ListingSnapshot.captured_at.desc())
+        .first()
+    )
+
+
+def get_listing_with_latest_snapshot(
+    session: Session, listing_id: int
+) -> "tuple[Listing, ListingSnapshot | None] | None":
+    """Return ``(listing, latest_snapshot)`` for *listing_id*, or ``None``.
+
+    Returns ``None`` when the listing does not exist.  Returns
+    ``(listing, None)`` when the listing exists but has no snapshots.
+    """
+    listing = get_listing(session, listing_id)
+    if listing is None:
+        return None
+    snapshot = get_latest_snapshot(session, listing_id)
+    return (listing, snapshot)
+
+
+def insert_snapshot(
+    session: Session,
+    listing_id: int,
+    run_id: "int | None",
+    snapshot_data: dict,
+) -> "ListingSnapshot":
+    """Insert a new :class:`ListingSnapshot` from a data dict and return it.
+
+    ``snapshot_data`` keys map to :class:`ListingSnapshot` columns
+    (``nightly_price``, ``currency``, ``total_price``, ``fees``,
+    ``availability``, ``captured_at``).  Missing keys default to ``None``
+    except ``captured_at`` which defaults to the current UTC time.
+    """
+    snap = ListingSnapshot(
+        listing_id=listing_id,
+        run_id=run_id,
+        nightly_price=snapshot_data.get("nightly_price"),
+        currency=snapshot_data.get("currency"),
+        total_price=snapshot_data.get("total_price"),
+        fees=snapshot_data.get("fees"),
+        availability=snapshot_data.get("availability"),
+        captured_at=snapshot_data.get("captured_at") or datetime.utcnow(),
+    )
+    session.add(snap)
+    session.flush()
+    return snap
+
+
+def get_listings_for_run(run_id: int, engine: Engine) -> Any:  # returns pd.DataFrame
+    """Return a :class:`pandas.DataFrame` of all listings for *run_id*.
+
+    Each row combines columns from :class:`Listing` (identity and metadata)
+    and the corresponding :class:`ListingSnapshot` (price, currency).
+    Returns an **empty** DataFrame when the run has no snapshots.
+    """
+    import pandas as pd
+
+    Session = sessionmaker(bind=engine)
+    with Session() as session:
+        pairs = (
+            session.query(Listing, ListingSnapshot)
+            .join(ListingSnapshot, ListingSnapshot.listing_id == Listing.id)
+            .filter(ListingSnapshot.run_id == run_id)
+            .all()
+        )
+
+    if not pairs:
+        return pd.DataFrame()
+
+    rows = []
+    for listing, snapshot in pairs:
+        rows.append(
+            {
+                "id": listing.id,
+                "name": listing.name,
+                "source": listing.source,
+                "nightly_price": snapshot.nightly_price,
+                "rating": listing.rating,
+                "property_type": listing.property_type,
+                "url": listing.url,
+                "currency": snapshot.currency,
+                "review_count": listing.review_count,
+                "bedrooms": listing.bedrooms,
+                "beds": listing.beds,
+                "host_or_brand": listing.host_or_brand,
+                "address_text": listing.address_text,
+                "lat": listing.lat,
+                "lon": listing.lon,
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def list_search_runs(limit: int = 50) -> list[dict[str, Any]]:
+    """Return recent :class:`SearchRun` rows as plain dicts, newest first."""
+    engine = get_engine()
+    Session = sessionmaker(bind=engine)
+    with Session() as session:
+        runs = (
+            session.query(SearchRun)
+            .order_by(SearchRun.started_at.desc())
+            .limit(limit)
+            .all()
+        )
+        return [
+            {
+                "id": r.id,
+                "area_query": r.area_query,
+                "started_at": r.started_at,
+                "status": r.status,
+                "stats": r.stats or {},
+            }
+            for r in runs
+        ]
 
 
 def get_all_runs_with_cost(session: Session) -> list[dict[str, Any]]:

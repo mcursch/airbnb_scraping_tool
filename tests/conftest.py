@@ -3,15 +3,17 @@
 from __future__ import annotations
 
 import os
+from datetime import datetime
 from pathlib import Path
 
 import pytest
 from sqlalchemy import create_engine, event, inspect
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import Session, sessionmaker
 
 from airbnb_scraping_tool.db.models import Base as AirbnbBase
 from airbnb_scraping_tool.db.repo import Repo
 import db.models as root_db_models
+from db.models import Listing, ListingSnapshot, SearchRun
 from db.repo import create_all, get_engine
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
@@ -66,6 +68,45 @@ def db_engine():
     }
     missing = expected_tables - existing_tables
     assert not missing, f"Missing tables after create_all: {missing}"
+
+    # ── Seed data for test_results_table.py ──────────────────────────────────
+    # Five listings across two sources, three property types, and varying prices
+    # and ratings.  All tied to SearchRun id=1 via ListingSnapshot rows.
+    _SEED = [
+        # (source, src_id, name, property_type, price, rating)
+        ("airbnb", "seed-1", "Sunny Studio",    "apartment", 80.0,  4.2),
+        ("airbnb", "seed-2", "Beachfront Flat",  "apartment", 120.0, 4.8),
+        ("airbnb", "seed-3", "Hillside Villa",   "villa",     150.0, 4.6),
+        ("booking","seed-4", "City Hotel Plus",  "hotel",     100.0, 4.3),
+        ("booking","seed-5", "Luxury Boutique",  "hotel",     180.0, 4.9),
+    ]
+    now = datetime(2024, 1, 1)
+    with Session(engine) as sess:
+        run = SearchRun(area_query="Test City", started_at=now, status="completed")
+        sess.add(run)
+        sess.flush()  # run.id is now assigned (will be 1 in empty DB)
+        for source, src_id, name, prop_type, price, rating in _SEED:
+            listing = Listing(
+                source=source,
+                source_listing_id=src_id,
+                name=name,
+                property_type=prop_type,
+                rating=rating,
+                url=f"https://example.com/{src_id}",
+                first_seen_at=now,
+                last_seen_at=now,
+            )
+            sess.add(listing)
+            sess.flush()
+            snap = ListingSnapshot(
+                listing_id=listing.id,
+                run_id=run.id,
+                nightly_price=price,
+                currency="USD",
+                captured_at=now,
+            )
+            sess.add(snap)
+        sess.commit()
 
     yield engine
     engine.dispose()

@@ -21,7 +21,9 @@ import pandas as pd
 from sqlalchemy import Engine
 
 import db.repo as repo
-from db.models import engine as _default_engine
+from db.repo import get_engine as _get_engine
+
+_default_engine = _get_engine()
 
 # Columns guaranteed in the returned DataFrame (order defines display order).
 DISPLAY_COLUMNS: list[str] = [

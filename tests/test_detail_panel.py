@@ -10,7 +10,8 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
-from db.models import Base, Listing, ListingSnapshot, get_engine
+from db.models import Base, Listing, ListingSnapshot
+from db.repo import get_engine
 from db.repo import (
     get_latest_snapshot,
     get_listing,

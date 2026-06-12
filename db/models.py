@@ -3,6 +3,7 @@
 from datetime import datetime
 
 import hashlib
+import json
 
 from sqlalchemy import (
     Column,
@@ -74,6 +75,29 @@ class Listing(Base):
 
     snapshots = relationship("ListingSnapshot", back_populates="listing")
 
+    @property
+    def amenities_list(self) -> list:
+        """Return ``amenities`` parsed as a Python list, or ``[]`` on failure."""
+        if not self.amenities:
+            return []
+        try:
+            raw = self.amenities if isinstance(self.amenities, str) else json.dumps(self.amenities)
+            parsed = json.loads(raw)
+            return parsed if isinstance(parsed, list) else []
+        except (json.JSONDecodeError, TypeError, ValueError):
+            return []
+
+    @property
+    def latest_snapshot(self):
+        """Return the most-recently-captured :class:`ListingSnapshot`, or ``None``."""
+        snaps = list(self.snapshots)  # triggers lazy-load when session is active
+        if not snaps:
+            return None
+        with_dates = [s for s in snaps if s.captured_at is not None]
+        if with_dates:
+            return max(with_dates, key=lambda s: s.captured_at)
+        return snaps[-1]
+
 
 class ListingSnapshot(Base):
     """Price and availability captured per search run for a given listing.
@@ -86,7 +110,7 @@ class ListingSnapshot(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     listing_id = Column(Integer, ForeignKey("listings.id"), nullable=False)
-    run_id = Column(Integer, ForeignKey("search_runs.id"), nullable=False)
+    run_id = Column(Integer, ForeignKey("search_runs.id"), nullable=True)
     nightly_price = Column(Float)
     currency = Column(String)
     total_price = Column(Float)
@@ -96,6 +120,18 @@ class ListingSnapshot(Base):
 
     listing = relationship("Listing", back_populates="snapshots")
     run = relationship("SearchRun", back_populates="snapshots")
+
+    @property
+    def fees_dict(self) -> dict:
+        """Return ``fees`` parsed as a Python dict, or ``{}`` on failure."""
+        if not self.fees:
+            return {}
+        try:
+            raw = self.fees if isinstance(self.fees, str) else json.dumps(self.fees)
+            parsed = json.loads(raw)
+            return parsed if isinstance(parsed, dict) else {}
+        except (json.JSONDecodeError, TypeError, ValueError):
+            return {}
 
 
 class RawScrape(Base):
