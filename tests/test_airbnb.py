@@ -239,7 +239,57 @@ class TestAirbnbScraperInstantiation:
 
         scraper = AirbnbScraper()
         assert callable(scraper.search)
-        assert inspect.isasyncgenfunction(scraper.search)
+        # search() must be a plain synchronous method, not an async generator,
+        # so that it conforms to the ScrapeProvider interface (LIN-157).
+        assert not inspect.isasyncgenfunction(scraper.search)
+        assert not inspect.iscoroutinefunction(scraper.search)
+
+    def test_search_returns_list_not_coroutine(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """LIN-157: search() must return a list, never a coroutine/async-generator.
+
+        Monkeypatch _run_browser so we never touch a real browser; just verify
+        the synchronous wrapper converts the result to a list correctly.
+        """
+        import asyncio
+        from scrapers.base import RawScrape
+
+        scraper = AirbnbScraper()
+
+        async def _fake_run_browser(query: object) -> list:
+            return []
+
+        monkeypatch.setattr(scraper, "_run_browser", _fake_run_browser)
+
+        query = SearchQuery(area="Test City")
+        result = scraper.search(query)
+
+        # Must be a plain list, not a coroutine or async generator.
+        assert isinstance(result, list)
+        assert not asyncio.iscoroutine(result)
+
+    def test_search_result_items_are_raw_scrapes(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """LIN-157: each item in the list returned by search() is a RawScrape."""
+        from scrapers.base import RawScrape
+
+        scraper = AirbnbScraper()
+
+        async def _fake_run_browser(query: object) -> list:
+            return [
+                ("https://www.airbnb.com/api/v3/StaysSearch?q=1", {"data": {"listings": []}}),
+            ]
+
+        monkeypatch.setattr(scraper, "_run_browser", _fake_run_browser)
+
+        query = SearchQuery(area="Lisbon, Portugal")
+        results = scraper.search(query)
+
+        assert len(results) == 1
+        record = results[0]
+        assert isinstance(record, RawScrape)
+        assert record.source == "airbnb"
+        assert record.url == "https://www.airbnb.com/api/v3/StaysSearch?q=1"
+        assert record.payload == '{"data": {"listings": []}}'
+        assert record.content_hash  # non-empty hash
 
 
 # ---------------------------------------------------------------------------
@@ -280,25 +330,27 @@ class TestImports:
     os.environ.get("AIRBNB_LIVE_TEST") != "1",
     reason="Live network test — set AIRBNB_LIVE_TEST=1 to enable",
 )
-@pytest.mark.asyncio
-async def test_live_search_returns_payloads() -> None:
+def test_live_search_returns_payloads() -> None:
     """
-    Smoke-test: AirbnbScraper.search() against a real query must yield at
-    least one non-empty dict payload without raising.
+    Smoke-test: AirbnbScraper.search() against a real query must return at
+    least one non-empty RawScrape payload without raising.
+
+    search() is now synchronous (LIN-157), so no ``async for`` is needed.
 
     Run with: AIRBNB_LIVE_TEST=1 pytest tests/test_airbnb.py::test_live_search_returns_payloads -v
     """
+    from scrapers.base import RawScrape
+
     scraper = AirbnbScraper(headless=True)
     query = SearchQuery(area="Lisbon, Portugal", guests=2)
 
-    payloads: list[tuple[str, dict]] = []
-    async for url, payload in scraper.search(query):
-        payloads.append((url, payload))
+    results = scraper.search(query)
 
-    assert len(payloads) >= 1, "Expected at least one intercepted API payload"
+    assert isinstance(results, list), "search() must return a list"
+    assert len(results) >= 1, "Expected at least one intercepted API payload"
 
-    for url, payload in payloads:
-        assert isinstance(url, str) and url.startswith("https://")
-        assert isinstance(payload, dict) and len(payload) > 0
-        # Payloads must be dicts (parsed JSON), never raw HTML strings.
-        assert not isinstance(payload, str)
+    for record in results:
+        assert isinstance(record, RawScrape)
+        assert isinstance(record.url, str) and record.url.startswith("https://")
+        assert isinstance(record.payload, str) and len(record.payload) > 0
+        assert record.source == "airbnb"

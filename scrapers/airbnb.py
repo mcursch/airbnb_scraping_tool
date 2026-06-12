@@ -23,7 +23,6 @@ import logging
 import random
 import time
 import urllib.parse
-from collections.abc import AsyncGenerator
 from typing import TYPE_CHECKING, Any
 
 try:
@@ -42,7 +41,7 @@ if TYPE_CHECKING:
     from playwright.async_api import Response
     from playwright.sync_api import Page
 
-from scrapers.base import ScrapeProvider, SearchQuery as BaseSearchQuery
+from scrapers.base import RawScrape as BaseRawScrape, ScrapeProvider, SearchQuery as BaseSearchQuery
 
 # RawPayload is a parsed-JSON dict from an Airbnb API response.
 RawPayload = dict
@@ -178,23 +177,38 @@ class AirbnbScraper(ScrapeProvider):
         self.extra_wait_max = extra_wait_max
 
     # ------------------------------------------------------------------
-    # Public interface
+    # Public interface (synchronous, conforming to ScrapeProvider)
     # ------------------------------------------------------------------
 
-    async def search(
-        self, query: SearchQuery
-    ) -> AsyncGenerator[tuple[str, RawPayload], None]:
-        """Yield ``(url, payload)`` for each intercepted Airbnb API response.
+    def search(self, query: SearchQuery) -> list[BaseRawScrape]:
+        """Execute a search and return raw page payloads as :class:`RawScrape` records.
 
-        Yields
-        ------
-        tuple[str, RawPayload]
-            * ``url`` — the full URL of the intercepted API response.
-            * ``payload`` — the response body parsed from JSON into a ``dict``.
+        Runs the async :meth:`_run_browser` coroutine via :func:`asyncio.run`
+        so that this method conforms to the synchronous
+        :class:`~scrapers.base.ScrapeProvider` interface.  Callers receive a
+        plain list and never a coroutine object or async generator.
+
+        Parameters
+        ----------
+        query:
+            Describes the area, dates, and guest count to search for.
+
+        Returns
+        -------
+        list[RawScrape]
+            One record per intercepted Airbnb API response.
         """
-        captured = await self._run_browser(query)
+        captured = asyncio.run(self._run_browser(query))
+        results: list[BaseRawScrape] = []
         for url, payload in captured:
-            yield url, payload
+            results.append(
+                BaseRawScrape(
+                    source="airbnb",
+                    url=url,
+                    payload=json.dumps(payload),
+                )
+            )
+        return results
 
     # ------------------------------------------------------------------
     # Sync pagination flow (used by tests via monkeypatching)
