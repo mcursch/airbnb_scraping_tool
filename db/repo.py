@@ -10,9 +10,10 @@ from sqlalchemy.orm import Session, sessionmaker
 from config import settings
 from db.models import Base, ExtractionLog, RawScrape, SearchRun
 
+_connect_args = {"check_same_thread": False} if settings.DATABASE_URL.startswith("sqlite") else {}
 engine = create_engine(
     settings.DATABASE_URL,
-    connect_args={"check_same_thread": False},
+    connect_args=_connect_args,
 )
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 
@@ -36,7 +37,7 @@ def get_all_runs_with_cost(session: Session) -> list[dict[str, Any]]:
     Cost formula (matching Anthropic's billing):
         cost = (input_tokens × INPUT_PRICE
                 + output_tokens × OUTPUT_PRICE
-                - cache_read_tokens × CACHE_READ_PRICE) / 1_000_000
+                + cache_read_tokens × CACHE_READ_PRICE) / 1_000_000
 
     Runs with no extraction logs produce a cost of $0.00 without error.
     """
@@ -63,7 +64,7 @@ def get_all_runs_with_cost(session: Session) -> list[dict[str, Any]]:
         estimated_cost = (
             total_input * input_price
             + total_output * output_price
-            - total_cache_read * cache_read_price
+            + total_cache_read * cache_read_price
         ) / 1_000_000
 
         listing_count: int = (run.stats or {}).get("listing_count", 0)

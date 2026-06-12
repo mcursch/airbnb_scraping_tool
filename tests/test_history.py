@@ -114,7 +114,7 @@ def test_cost_calculation_matches_manual(session):
     expected = (
         10_000 * input_price
         + 2_000 * output_price
-        - 5_000 * cache_read_price
+        + 5_000 * cache_read_price
     ) / 1_000_000
 
     assert row["estimated_cost_usd"] == pytest.approx(expected, rel=1e-9)
@@ -140,7 +140,7 @@ def test_cost_aggregated_across_multiple_scrapes(session):
     expected = (
         3_000 * settings.CLAUDE_OPUS_4_8_INPUT_PRICE_PER_MTOK
         + 1_300 * settings.CLAUDE_OPUS_4_8_OUTPUT_PRICE_PER_MTOK
-        - 800 * settings.CLAUDE_OPUS_4_8_CACHE_READ_PRICE_PER_MTOK
+        + 800 * settings.CLAUDE_OPUS_4_8_CACHE_READ_PRICE_PER_MTOK
     ) / 1_000_000
 
     assert row["estimated_cost_usd"] == pytest.approx(expected, rel=1e-9)
