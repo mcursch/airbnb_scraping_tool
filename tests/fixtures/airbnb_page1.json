@@ -1,0 +1,52 @@
+{
+  "data": {
+    "presentation": {
+      "staysSearch": {
+        "results": {
+          "paginationInfo": {
+            "paginationCursor": "CURSOR_PAGE_2_ABCDEF",
+            "hasNextPage": true
+          },
+          "searchResults": [
+            {
+              "listing": {
+                "id": "12345678",
+                "name": "Lovely Studio in Lisbon",
+                "roomType": "Entire home/apt",
+                "coordinate": {"latitude": 38.7223, "longitude": -9.1393},
+                "avgRating": 4.85,
+                "reviewsCount": 128,
+                "personCapacity": 2,
+                "bedrooms": 1,
+                "beds": 1,
+                "city": "Lisbon"
+              },
+              "pricingQuote": {
+                "rate": {"amount": 89.0, "currency": "USD"},
+                "totalPrice": {"amount": 623.0, "currency": "USD"}
+              }
+            },
+            {
+              "listing": {
+                "id": "87654321",
+                "name": "Cosy Room Near Alfama",
+                "roomType": "Private room",
+                "coordinate": {"latitude": 38.7139, "longitude": -9.1334},
+                "avgRating": 4.72,
+                "reviewsCount": 64,
+                "personCapacity": 2,
+                "bedrooms": 1,
+                "beds": 1,
+                "city": "Lisbon"
+              },
+              "pricingQuote": {
+                "rate": {"amount": 55.0, "currency": "USD"},
+                "totalPrice": {"amount": 385.0, "currency": "USD"}
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}
