@@ -144,7 +144,7 @@ class RawScrape(Base):
     source = Column(String, nullable=False)
     url = Column(String)
     payload = Column(Text)
-    content_hash = Column(String, index=True)
+    content_hash = Column(String, unique=True)
     fetched_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     status = Column(String, default="pending", nullable=False)
     error = Column(Text)
