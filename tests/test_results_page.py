@@ -39,13 +39,23 @@ def _make_mock_st(session_state: dict | None = None):
         key, args[0] if args else None
     )
 
-    # Make expander, columns, and tabs usable as context managers.
+    # Make expander, container, columns, and tabs usable as context managers.
     ctx = MagicMock()
     ctx.__enter__ = MagicMock(return_value=ctx)
     ctx.__exit__ = MagicMock(return_value=False)
     mock.expander.return_value = ctx
-    mock.columns.return_value = (ctx, ctx)
+    mock.container.return_value = ctx
     mock.tabs.return_value = (ctx, ctx, ctx)
+
+    # columns(n) or columns([w1, w2, ...]) → a tuple of the right length.
+    def _columns(spec, **_kw):
+        n = spec if isinstance(spec, int) else len(spec)
+        return tuple(ctx for _ in range(n))
+
+    mock.columns.side_effect = _columns
+
+    # The Enrich button must read False so render() never triggers enrichment.
+    mock.button.return_value = False
 
     return mock
 

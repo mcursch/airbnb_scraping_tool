@@ -39,6 +39,14 @@ DISPLAY_COLUMNS: list[str] = [
     "beds",
     "host_or_brand",
     "address_text",
+    # Expanded fields — visible so blanks are obvious before enrichment fills them.
+    "neighborhood",
+    "host_is_superhost",
+    "cleaning_fee",
+    "minimum_nights",
+    "cancellation_policy",
+    "checkin_time",
+    "enrichment_status",
 ]
 
 

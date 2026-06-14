@@ -24,7 +24,9 @@ class Settings(BaseSettings):
     enrich_model: str = "claude-opus-4-8"
     enrich_max_listings: int = 5   # cap enriched listings per run (cost control)
     enrich_min_gaps: int = 3       # only enrich listings missing ≥ this many fields
-    enrich_max_fields: int = 6     # research at most this many gaps per listing
+    enrich_max_fields: int = 4     # research at most this many gaps per listing
+                                   # (fewer = each web-research call finishes well
+                                   #  under the request timeout, more reliably)
     # Approx. Anthropic web-search billing: ~$10 per 1,000 search requests.
     WEB_SEARCH_PRICE_PER_REQUEST: float = 0.01
 

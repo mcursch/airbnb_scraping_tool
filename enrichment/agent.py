@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from dataclasses import dataclass, field
 from typing import Any, get_args, get_origin
 
@@ -235,12 +236,17 @@ class EnrichmentAgent:
         client: Any | None = None,
         model: str | None = None,
         *,
-        max_loops: int = 4,
+        max_loops: int = 2,
         max_fields: int | None = None,
+        max_seconds: float = 100.0,
     ) -> None:
         self._client = client
         self._model = model or settings.enrich_model
         self._max_loops = max_loops
+        # Hard wall-clock budget per listing so a hard-to-research listing (e.g.
+        # an anonymous apartment the model can't find) can't loop indefinitely
+        # across pause_turn continuations and hang a UI spinner.
+        self._max_seconds = max_seconds
         # Cap how many gaps we research per listing. Each field costs ~1 web
         # search, and a request that searches 20+ fields serially runs for
         # minutes; bounding the field count keeps each call fast and cheap.
@@ -286,9 +292,13 @@ class EnrichmentAgent:
         messages: list[dict[str, Any]] = [{"role": "user", "content": user_prompt}]
         result = EnrichmentResult()
         container: Any = None
+        started = time.monotonic()
 
         try:
             for _ in range(self._max_loops):
+                if time.monotonic() - started > self._max_seconds:
+                    logger.info("Enrichment time budget hit for %s", listing.url)
+                    break
                 kwargs: dict[str, Any] = dict(
                     model=self._model,
                     max_tokens=4096,

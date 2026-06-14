@@ -32,6 +32,58 @@ def _get_cached_engine():
     return _get_engine()
 
 
+def _gap_columns(df) -> list[str]:
+    """Enrichable display columns present in the frame (for the gap summary)."""
+    candidates = [
+        "neighborhood", "host_is_superhost", "cleaning_fee", "minimum_nights",
+        "cancellation_policy", "checkin_time", "rating", "review_count",
+    ]
+    return [c for c in candidates if c in df.columns]
+
+
+def _render_enrich_control(run_id: int, df) -> None:
+    """Render the 'Enrich missing fields' button + a blanks summary."""
+    gap_cols = _gap_columns(df)
+    blanks = int(df[gap_cols].isna().sum().sum()) if gap_cols else 0
+
+    with st.container(border=True):
+        st.markdown("#### ✨ Enrich missing data")
+        st.caption(
+            "Fill blank fields (host, fees, policies, ratings…) with an agent that "
+            "researches the web and records a source + confidence for each value. "
+            "Costs extra LLM tokens + web searches (~$0.15 and ~80s per listing)."
+        )
+        c1, c2, c3 = st.columns([1.2, 1.6, 1.2])
+        with c1:
+            n = st.number_input(
+                "Listings to enrich", min_value=1, max_value=10, value=3, step=1,
+                help="The gappiest listings are enriched first.",
+            )
+        with c2:
+            st.metric("Blank cells in shown fields", f"{blanks:,}")
+        with c3:
+            st.write("")
+            go = st.button("✨ Enrich now", type="primary", use_container_width=True)
+
+    if go:
+        from enrichment.run_enrich import enrich_run
+
+        bar = st.progress(0.0, text="Starting enrichment…")
+
+        def _cb(frac: float, msg: str) -> None:
+            bar.progress(min(max(frac, 0.0), 1.0), text=msg)
+
+        with st.spinner("Researching the web to fill blanks…"):
+            summary = enrich_run(run_id, max_listings=int(n), progress_callback=_cb)
+        bar.progress(1.0, text="Done.")
+        st.success(
+            f"Enriched **{summary['enriched_count']}/{summary['selected']}** listings · "
+            f"{summary['searches']} web searches · ${summary['cost_usd']:.2f}."
+        )
+        # Reload so the table reflects the newly-filled values.
+        st.rerun()
+
+
 def render() -> None:
     st.title("📋 Results")
 
@@ -71,6 +123,9 @@ def render() -> None:
     if df.empty:
         st.info("No listings found for this run.  Try running a new search.")
         return
+
+    # ── Enrich missing fields (on-demand web research) ──────────────────────────
+    _render_enrich_control(run_id, df)
 
     # ── Filters ───────────────────────────────────────────────────────────────
     with st.expander("🔧 Filters", expanded=False):
@@ -194,6 +249,30 @@ def render() -> None:
             _Session = _sessionmaker(bind=_get_cached_engine())
             with _Session() as session:
                 render_detail_panel(listing_id=listing_id, session=session)
+                _render_provenance(session, listing_id)
+
+
+def _render_provenance(session, listing_id: int) -> None:
+    """Show where each enriched field came from (value, confidence, source URL)."""
+    from db.models import Listing
+
+    listing = session.get(Listing, listing_id)
+    prov = getattr(listing, "enrichment", None) if listing else None
+    if not prov:
+        return
+
+    with st.expander("✨ Enrichment provenance", expanded=True):
+        st.caption("Fields filled by web research, with source and confidence.")
+        for field, info in prov.items():
+            conf = info.get("confidence")
+            conf_str = f"{conf:.0%}" if isinstance(conf, (int, float)) else "—"
+            url = info.get("source_url") or ""
+            src = f"[source]({url})" if url else "—"
+            st.markdown(
+                f"- **{field}** = `{info.get('value')}`  ·  confidence {conf_str}  ·  {src}"
+            )
+            if info.get("reasoning"):
+                st.caption(f"    ↳ {info['reasoning']}")
 
 
 render()

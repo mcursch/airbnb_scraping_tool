@@ -393,6 +393,30 @@ def get_listings_for_run(run_id: int, engine: Engine) -> Any:  # returns pd.Data
                 "address_text": listing.address_text,
                 "lat": listing.lat,
                 "lon": listing.lon,
+                # Expanded fields (host/trust, location, policies — from Listing)
+                "neighborhood": listing.neighborhood,
+                "host_is_superhost": listing.host_is_superhost,
+                "host_response_rate": listing.host_response_rate,
+                "rating_cleanliness": listing.rating_cleanliness,
+                "rating_location": listing.rating_location,
+                "rating_value": listing.rating_value,
+                "license_number": listing.license_number,
+                "distance_to_center_km": listing.distance_to_center_km,
+                "cancellation_policy": listing.cancellation_policy,
+                "checkin_time": listing.checkin_time,
+                "checkout_time": listing.checkout_time,
+                "instant_book": listing.instant_book,
+                "pets_allowed": listing.pets_allowed,
+                "smoking_allowed": listing.smoking_allowed,
+                "events_allowed": listing.events_allowed,
+                "enrichment_status": listing.enrichment_status,
+                # Pricing breakdown (per-stay — from ListingSnapshot)
+                "total_price": snapshot.total_price,
+                "cleaning_fee": snapshot.cleaning_fee,
+                "service_fee": snapshot.service_fee,
+                "taxes": snapshot.taxes,
+                "deposit": snapshot.deposit,
+                "minimum_nights": snapshot.minimum_nights,
             }
         )
     return pd.DataFrame(rows)
