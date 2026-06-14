@@ -76,17 +76,29 @@ def _render_area_picker() -> None:
         st.success(f"Selected area: **{st.session_state['area']}**")
 
 
+# Friendly label → canonical Source identifier for the source picker.
+_SOURCE_LABELS: dict[str, str] = {
+    "Airbnb": "airbnb",
+    "Booking.com": "booking",
+    "Vrbo": "vrbo",
+    "Expedia / Hotels.com": "expedia",
+    "Google Hotels": "google_hotels",
+    "Hostelworld": "hostelworld",
+}
+
+
 def _run_in_thread(
     query: SearchQuery,
     progress_q: "queue.Queue[tuple[float, str]]",
     result_q: "queue.Queue[PipelineResult]",
+    enrich: bool = False,
 ) -> None:
     """Target function for the background search thread."""
 
     def _callback(fraction: float, message: str) -> None:
         progress_q.put((fraction, message))
 
-    result = run_search(query, progress_callback=_callback)
+    result = run_search(query, progress_callback=_callback, enrich=enrich)
     result_q.put(result)
 
 
@@ -134,9 +146,17 @@ def render() -> None:
 
         source_options = st.multiselect(
             "Sources",
-            options=["Airbnb", "Hotels"],
-            default=["Airbnb", "Hotels"],
-            help="Which platforms to search.",
+            options=list(_SOURCE_LABELS.keys()),
+            default=["Airbnb"],
+            help="Which platforms to search. Non-Airbnb sources are bot-protected "
+            "and may rely on the paid fallback.",
+        )
+
+        enrich = st.checkbox(
+            "Enrich missing fields (web research)",
+            value=False,
+            help="After extraction, use a web-research agent to fill gaps on "
+            "listings (extra LLM + web-search cost; capped per run).",
         )
 
         submitted = st.form_submit_button("Search", type="primary", use_container_width=True)
@@ -162,12 +182,9 @@ def render() -> None:
         return
 
     # ── Normalise sources → list of valid Source literals ─────────────────────
-    selected = {s.lower() for s in source_options}
-    sources_list: list[str] = []
-    if "airbnb" in selected:
-        sources_list.append("airbnb")
-    if "hotels" in selected:
-        sources_list.append("booking")  # the "Hotels" source is Booking.com
+    sources_list: list[str] = [
+        _SOURCE_LABELS[label] for label in source_options if label in _SOURCE_LABELS
+    ]
 
     query = SearchQuery(
         area=area.strip(),
@@ -183,7 +200,7 @@ def render() -> None:
 
     thread = threading.Thread(
         target=_run_in_thread,
-        args=(query, progress_q, result_q),
+        args=(query, progress_q, result_q, enrich),
         daemon=True,
     )
     thread.start()

@@ -106,7 +106,8 @@ def _cmd_scan(args: types.SimpleNamespace) -> None:
     "--sources",
     default="airbnb,booking",
     show_default=True,
-    help="Comma-separated list of sources: airbnb,booking",
+    help="Comma-separated sources: airbnb, booking, vrbo, expedia, "
+    "google_hotels, hostelworld",
 )
 @click.option("--no-extract", is_flag=True, default=False, help="Acquire only; skip LLM extraction")
 @click.option("--batch", is_flag=True, default=False, help="Force Message Batches API for extraction")
@@ -151,8 +152,10 @@ def scan(
     from pipeline import Pipeline, run_search
     from schemas.models import SearchQuery
 
+    from scrapers.registry import normalize_sources
+
     resolved_model = _resolve_model(model)
-    sources_list = [s.strip() for s in sources.split(",") if s.strip() in ("airbnb", "booking")] or ["airbnb"]
+    sources_list = normalize_sources([s.strip() for s in sources.split(",") if s.strip()])
     query = SearchQuery(
         area=area,
         checkin=_parse_date(checkin),
@@ -201,29 +204,14 @@ def scan(
 
 
 def _build_scrapers(sources: list[str]):  # noqa: ANN201
-    """Return scraper instances for the requested sources.
+    """Return scraper instances for the requested sources via the registry.
 
     Real scrapers (Playwright, httpx) are only constructed here; stubs are
     injected by tests instead of calling this function.
     """
-    scrapers = []
-    # Import real scrapers lazily so the CLI starts fast even if Playwright
-    # is not installed.
-    if "airbnb" in sources:
-        try:
-            from scrapers.airbnb import AirbnbScraper  # type: ignore[import]
-            scrapers.append(AirbnbScraper())
-        except ImportError:
-            click.echo("Warning: Airbnb scraper not available (install playwright).", err=True)
+    from scrapers.registry import build_scrapers
 
-    if "booking" in sources:
-        try:
-            from scrapers.booking import BookingScraper  # type: ignore[import]
-            scrapers.append(BookingScraper())
-        except ImportError:
-            click.echo("Warning: Booking.com scraper not available.", err=True)
-
-    return scrapers
+    return build_scrapers(sources)
 
 
 # ---------------------------------------------------------------------------

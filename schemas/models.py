@@ -15,7 +15,15 @@ from pydantic import BaseModel, Field, model_validator
 RawScrapeStatus = Literal["pending", "extracted", "failed"]
 SearchRunStatus = Literal["running", "completed", "failed"]
 ExtractionStatus = Literal["success", "failed"]
-Source = Literal["airbnb", "booking", "other"]
+Source = Literal[
+    "airbnb",
+    "booking",
+    "vrbo",
+    "expedia",
+    "google_hotels",
+    "hostelworld",
+    "other",
+]
 
 
 # ---------------------------------------------------------------------------

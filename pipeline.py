@@ -103,23 +103,12 @@ def run_search(
 
     _progress(0.05, "Building scrapers…")
 
-    # Build scrapers lazily so missing optional dependencies don't crash the
-    # import; each scraper is silently skipped when its package is absent.
-    scrapers: list[Any] = []
-    sources = list(query.sources) if query.sources else ["airbnb"]
-    if "airbnb" in sources:
-        try:
-            from scrapers.airbnb import AirbnbScraper  # type: ignore[import]
-            scrapers.append(AirbnbScraper())
-        except (ImportError, Exception):  # noqa: BLE001
-            logger.warning("Airbnb scraper not available; skipping.")
+    # Build scrapers from the central registry (airbnb, booking, vrbo, expedia,
+    # google_hotels, hostelworld). Each is imported lazily and skipped if its
+    # optional dependency is missing.
+    from scrapers.registry import build_scrapers
 
-    if "booking" in sources or "hotels" in sources:
-        try:
-            from scrapers.booking import BookingScraper  # type: ignore[import]
-            scrapers.append(BookingScraper())
-        except (ImportError, Exception):  # noqa: BLE001
-            logger.warning("Booking.com scraper not available; skipping.")
+    scrapers: list[Any] = build_scrapers(list(query.sources) if query.sources else None)
 
     _progress(0.10, "Building extractor…")
 
