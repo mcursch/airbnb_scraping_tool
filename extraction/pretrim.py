@@ -51,20 +51,27 @@ _MAX_STR_LEN: int = 300
 _KEEP_SUBSTRINGS: tuple[str, ...] = (
     "name",
     "title",
+    "subtitle",
     "label",
+    "description",
     "price",
     "pricing",
     "rate",
+    "rating",      # avgRating / avgRatingLocalized ("4.96 (298)")
+    "review",      # review counts
     "nightly",
     "cost",
     "amount",
     "fee",
+    "discount",    # discountedPrice / originalPrice
+    "qualifier",   # "for 5 nights"
     "lat",
     "lon",
     "latitude",
     "longitude",
     "location",
     "coord",
+    "coordinate",
     "geo",
     "address",
     "city",
@@ -75,6 +82,13 @@ _KEEP_SUBSTRINGS: tuple[str, ...] = (
     "stay",
     "hotel",
     "accommodation",
+    "bed",         # "1 bedroom", beds
+    "bath",
+    "guest",
+    "room",
+    "badge",       # "Guest favorite"
+    "favorite",
+    "body",        # structuredContent MainSectionMessage bodies (bed info, dates)
     "currency",
     "checkin",
     "checkout",
@@ -131,9 +145,10 @@ _NOISE_SUBSTRINGS: tuple[str, ...] = (
     # Additional noise: display/UI-only fields that bulk up the payload
     # without adding extraction value.
     "a11y",        # accessibility labels (e.g. avgRatingA11yLabel)
-    "total",       # total-price roll-ups are redundant with component amounts
     "url",         # hyperlinks are not needed for price/location extraction
-    "formatted",   # pre-formatted display strings (e.g. amount_formatted)
+    "logging",     # loggingMetadata / loggingContext
+    "picture",     # image blobs / picture objects
+    "photo",
 )
 
 # ---------------------------------------------------------------------------
@@ -297,67 +312,67 @@ def _is_listing_like(d: dict) -> bool:
     return sum([has_price, has_name, has_location]) >= 2
 
 
-def _slim_dict(d: dict) -> dict:
-    """Return *d* with only listing-relevant keys, recursively.
+def _slim_dict(d: dict, inherited_keep: bool = False) -> dict:
+    """Return *d* with only listing-relevant content, recursively.
 
-    Single-key wrapper passthrough
-    --------------------------------
-    Some API shapes wrap a relevant value behind a non-descriptive key that
-    doesn't match any keep-substring, e.g.::
+    Sticky keep
+    -----------
+    Real-world API shapes wrap the values we want behind non-descriptive
+    wrapper keys, e.g. the Airbnb price lives at
+    ``structuredDisplayPrice.primaryLine.discountedPrice`` and the listing name
+    at ``name.localizedStringWithTranslationPreference``.  A flat keep-list
+    can't see those leaves because the *intermediate* keys don't match.
 
-        "pricingQuote": {
-            "structuredStayDisplayPrice": {   ← kept via "price"
-                "primaryLine": {              ← key not in keep list
-                    "price": "€65"            ← value we need
-                }
-            }
-        }
-
-    When a dict has *exactly one* key that fails the keep-filter AND that
-    key's value is a dict that slims to a non-empty result, we still emit
-    the wrapper key so the nested data survives.
+    So once a key matches the keep-list, we treat its entire subtree as
+    relevant (``inherited_keep``) and preserve every scalar leaf under it —
+    while still dropping any noise subtree (logging, analytics, pictures, …)
+    and over-long strings.  Outside a keep subtree, only keep-key scalars are
+    retained, which keeps unrelated branches from bloating the output.
     """
     result: dict = {}
     for k, v in d.items():
-        if not _keep_key(k):
-            # Single-key wrapper passthrough: preserve the key when it is the
-            # only key in this dict and its dict value contains useful content.
-            if isinstance(v, dict) and len(d) == 1:
-                slimmed = _slim_dict(v)
-                if slimmed:
-                    result[k] = slimmed
-            continue
+        if _is_noise_key(k):
+            continue  # drop noise subtree entirely
+        eff_keep = inherited_keep or _keep_leaf(k)
         if isinstance(v, dict):
-            slimmed = _slim_dict(v)
+            slimmed = _slim_dict(v, eff_keep)
             if slimmed:
                 result[k] = slimmed
         elif isinstance(v, list):
-            slimmed_list = _slim_list(v)
+            slimmed_list = _slim_list(v, eff_keep)
             if slimmed_list:
                 result[k] = slimmed_list
         elif isinstance(v, str):
-            if len(v) <= _MAX_STR_LEN:
+            if eff_keep and len(v) <= _MAX_STR_LEN:
                 result[k] = v
-            # Long strings (base-64, minified blobs) are silently dropped.
+            # Non-kept or over-long strings (base-64, minified blobs) dropped.
         else:
             # int, float, bool, None
-            result[k] = v
+            if eff_keep:
+                result[k] = v
     return result
 
 
-def _slim_list(lst: list) -> list:
+def _slim_list(lst: list, inherited_keep: bool = False) -> list:
     result = []
     for item in lst:
         if isinstance(item, dict):
-            s = _slim_dict(item)
+            s = _slim_dict(item, inherited_keep)
             if s:
                 result.append(s)
         elif isinstance(item, str):
-            if len(item) <= _MAX_STR_LEN:
+            if inherited_keep and len(item) <= _MAX_STR_LEN:
                 result.append(item)
         else:
-            result.append(item)
+            if inherited_keep:
+                result.append(item)
     return result
+
+
+def _keep_leaf(key: str) -> bool:
+    """True if *key* matches a keep-substring (noise already handled separately)."""
+    k = key.lower().replace("-", "_")
+    return any(keep in k for keep in _KEEP_SUBSTRINGS)
 
 
 # ---------------------------------------------------------------------------
