@@ -17,6 +17,10 @@ from sqlalchemy.orm import Session
 from config import settings
 from db.models import ExtractionLog, RawScrape
 from extraction.pretrim import pretrim
+# Reuse the schema-embedded, JSON-only system prompt and JSON extractor from the
+# provider module so both extraction paths stay in lock-step. batch.py imports
+# SYSTEM_PROMPT from here, so this keeps the Batches path aligned too.
+from extraction.provider import SYSTEM_PROMPT, _extract_json
 from schemas.listing import ListingExtraction
 
 # ---------------------------------------------------------------------------
@@ -24,13 +28,6 @@ from schemas.listing import ListingExtraction
 # ---------------------------------------------------------------------------
 
 MODEL = "claude-opus-4-8"
-
-SYSTEM_PROMPT = """\
-You are a structured data extraction assistant for a short-stay accommodation scanner.
-Given raw scraped content from a listing page, extract the listing details into the
-provided JSON schema.  Be precise; use null for any field you cannot determine.
-Extract only what is present in the content — do not invent values.
-"""
 
 # ---------------------------------------------------------------------------
 # Default client factory
@@ -101,9 +98,13 @@ def extract_listings(
         try:
             trimmed = pretrim(payload)
 
-            response = client.messages.parse(
+            # JSON mode (not grammar-constrained structured output): our listing
+            # schema is too rich for constrained decoding ("Schema is too
+            # complex" / "Grammar compilation timed out"). Ask for JSON and
+            # validate with Pydantic instead.
+            response = client.messages.create(
                 model=MODEL,
-                max_tokens=4096,
+                max_tokens=8192,
                 system=[
                     {
                         "type": "text",
@@ -120,10 +121,12 @@ def extract_listings(
                         ),
                     }
                 ],
-                output_format=ListingExtraction,
             )
 
             usage = response.usage
+            text = "".join(b.text for b in response.content if b.type == "text")
+            parsed = ListingExtraction.model_validate_json(_extract_json(text))
+
             log = ExtractionLog(
                 raw_scrape_id=raw_scrape.id,
                 model=MODEL,
@@ -137,7 +140,7 @@ def extract_listings(
             session.add(log)
             raw_scrape.status = "extracted"
             session.flush()
-            results.append(response.parsed)
+            results.append(parsed)
 
         except Exception as exc:  # noqa: BLE001
             raw_scrape.status = "failed"

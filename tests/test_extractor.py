@@ -9,6 +9,7 @@ from __future__ import annotations
 import inspect
 import json
 import pathlib
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock
 
@@ -61,7 +62,7 @@ def _make_mock_response(
     cache_read_input_tokens: int = 0,
     listings: list[ExtractedListing] | None = None,
 ) -> MagicMock:
-    """Build a fake Anthropic ParsedMessage response."""
+    """Build a fake Anthropic Message response (JSON mode: text content)."""
     if listings is None:
         listings = [_make_extracted_listing()]
 
@@ -71,8 +72,13 @@ def _make_mock_response(
     mock_usage.cache_read_input_tokens = cache_read_input_tokens
     mock_usage.cache_creation_input_tokens = 0 if cache_read_input_tokens > 0 else 320
 
+    # JSON mode: the extractor reads response.content text and validates JSON.
+    text_block = SimpleNamespace(
+        type="text",
+        text=ListingExtraction(listings=listings).model_dump_json(),
+    )
     mock_response = MagicMock()
-    mock_response.parsed = ListingExtraction(listings=listings)
+    mock_response.content = [text_block]
     mock_response.usage = mock_usage
     return mock_response
 
@@ -81,12 +87,12 @@ def _make_mock_client(
     side_effects: list[Any] | None = None,
     default_cache_read: int = 0,
 ) -> MagicMock:
-    """Return a mock Anthropic client whose messages.parse() is wired up."""
+    """Return a mock Anthropic client whose messages.create() is wired up."""
     mock_client = MagicMock()
     if side_effects is not None:
-        mock_client.messages.parse.side_effect = side_effects
+        mock_client.messages.create.side_effect = side_effects
     else:
-        mock_client.messages.parse.return_value = _make_mock_response(
+        mock_client.messages.create.return_value = _make_mock_response(
             cache_read_input_tokens=default_cache_read
         )
     return mock_client
@@ -184,18 +190,18 @@ class TestExtractListingsSuccess:
         mock_client = _make_mock_client()
         extract_listings([airbnb_raw_scrape], db_session, client=mock_client)
 
-        call_kwargs = mock_client.messages.parse.call_args
+        call_kwargs = mock_client.messages.create.call_args
         # System prompt block must be a list containing a dict with cache_control
         system_arg = call_kwargs.kwargs.get("system") or call_kwargs.args[0]
         # Access via kwargs since we call with keyword args
-        system_arg = mock_client.messages.parse.call_args.kwargs["system"]
+        system_arg = mock_client.messages.create.call_args.kwargs["system"]
         assert isinstance(system_arg, list)
         assert len(system_arg) == 1
         block = system_arg[0]
         assert block["type"] == "text"
         assert block["cache_control"] == {"type": "ephemeral"}
 
-        messages_arg = mock_client.messages.parse.call_args.kwargs["messages"]
+        messages_arg = mock_client.messages.create.call_args.kwargs["messages"]
         assert messages_arg[0]["role"] == "user"
         assert "airbnb" in messages_arg[0]["content"]
 
@@ -333,17 +339,23 @@ class TestErrorHandling:
 
 
 class TestSDKSignature:
-    """Smoke-test that guards against future SDK renames of output_format."""
+    """Guard the extractor against regressing to grammar-constrained output.
 
-    def test_messages_parse_accepts_output_format(self) -> None:
-        """Confirm the real SDK's messages.parse() accepts output_format kwarg."""
-        import anthropic
+    Our listing schema is too rich for ``messages.parse(output_format=...)``
+    (the API returns 400 "Schema is too complex" / "Grammar compilation timed
+    out"), so the extractor must use JSON mode via ``messages.create``.
+    """
 
-        client = anthropic.Anthropic(api_key="smoke-test-key")
-        assert "output_format" in inspect.signature(client.messages.parse).parameters, (
-            "anthropic SDK no longer has output_format in messages.parse(); "
-            "check for a renamed parameter and update extractor.py"
+    def test_extract_listings_uses_json_mode(self) -> None:
+        from extraction import extractor
+
+        src = inspect.getsource(extractor.extract_listings)
+        assert "messages.create" in src, "extract_listings must use messages.create (JSON mode)"
+        assert "messages.parse" not in src, (
+            "extract_listings regressed to grammar-constrained messages.parse(); "
+            "the listing schema is too complex for it — use JSON mode."
         )
+        assert "output_format" not in src
 
 
 class TestPretrim:
@@ -359,7 +371,7 @@ class TestPretrim:
         mock_client = _make_mock_client()
         extract_listings([scrape], db_session, client=mock_client)
 
-        user_content = mock_client.messages.parse.call_args.kwargs["messages"][0]["content"]
+        user_content = mock_client.messages.create.call_args.kwargs["messages"][0]["content"]
         # The JSON portion (after the prefix) should be compact — no indented lines.
         # The prefix adds a :\n\n but the JSON payload itself must not have newlines.
         json_part = user_content.split("\n\n", 1)[-1]

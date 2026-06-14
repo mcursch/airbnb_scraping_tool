@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import pathlib
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock, call, patch
 
@@ -149,12 +150,17 @@ def _make_sync_client() -> MagicMock:
     mock_usage.cache_read_input_tokens = 0
     mock_usage.cache_creation_input_tokens = 300
 
+    # JSON mode: the sync extractor reads response.content text and validates JSON.
+    text_block = SimpleNamespace(
+        type="text",
+        text=ListingExtraction(listings=[_make_extracted_listing()]).model_dump_json(),
+    )
     mock_response = MagicMock()
-    mock_response.parsed = ListingExtraction(listings=[_make_extracted_listing()])
+    mock_response.content = [text_block]
     mock_response.usage = mock_usage
 
     mock_client = MagicMock()
-    mock_client.messages.parse.return_value = mock_response
+    mock_client.messages.create.return_value = mock_response
     return mock_client
 
 
@@ -306,7 +312,7 @@ class TestSyncDelegationBelowThreshold:
         results = batch_extract(scrapes, db_session, threshold=DEFAULT_THRESHOLD, client=mock_client)
 
         # Synchronous path calls messages.parse once per record
-        assert mock_client.messages.parse.call_count == 5
+        assert mock_client.messages.create.call_count == 5
 
     def test_exactly_at_threshold_uses_sync_path(self, db_session: Session) -> None:
         """len == threshold is NOT above threshold; sync path expected."""
@@ -316,7 +322,7 @@ class TestSyncDelegationBelowThreshold:
         batch_extract(scrapes, db_session, threshold=DEFAULT_THRESHOLD, client=mock_client)
 
         mock_client.beta.messages.batches.create.assert_not_called()
-        assert mock_client.messages.parse.call_count == DEFAULT_THRESHOLD
+        assert mock_client.messages.create.call_count == DEFAULT_THRESHOLD
 
     def test_one_above_threshold_uses_batch_path(self, db_session: Session) -> None:
         """len == threshold + 1 triggers the batch path."""
@@ -337,7 +343,7 @@ class TestSyncDelegationBelowThreshold:
         batch_extract(scrapes, db_session, client=mock_client)  # no explicit threshold
 
         mock_client.beta.messages.batches.create.assert_not_called()
-        assert mock_client.messages.parse.call_count == 5
+        assert mock_client.messages.create.call_count == 5
 
 
 # ---------------------------------------------------------------------------
