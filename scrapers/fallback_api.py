@@ -4,11 +4,15 @@ When a primary :class:`~scrapers.base.ScrapeProvider` raises
 :exc:`~scrapers.base.BlockedError`, the pipeline retries the same query
 through this provider if ``SCRAPER_API_KEY`` is configured.
 
-The adapter supports two backends selected by ``settings.FALLBACK_PROVIDER``:
+The adapter supports three backends selected by ``settings.FALLBACK_PROVIDER``:
 
 * ``"scraperapi"`` — proxies the Airbnb search page through ScraperAPI.
 * ``"apify"`` — triggers an Airbnb-scraper actor on Apify and collects the
   dataset items.
+* ``"brightdata"`` — fetches the page through Bright Data's Web Unlocker
+  (pay-per-successful-request), returning the raw page for the LLM extractor.
+  Requires ``settings.BRIGHTDATA_ZONE`` (the Web Unlocker zone name) in
+  addition to ``SCRAPER_API_KEY`` (the Bright Data API token).
 """
 
 from __future__ import annotations
@@ -31,6 +35,7 @@ _APIFY_RUN_URL: str = (
     "https://api.apify.com/v2/acts/dtrungtin~airbnb-scraper"
     "/run-sync-get-dataset-items"
 )
+_BRIGHTDATA_URL: str = "https://api.brightdata.com/request"
 _AIRBNB_SEARCH_PATH: str = "https://www.airbnb.com/s/{area}/homes"
 
 
@@ -78,10 +83,12 @@ class FallbackApiProvider(ScrapeProvider):
             return self._search_scraperapi(query, str(api_key))
         if provider == "apify":
             return self._search_apify(query, str(api_key))
+        if provider == "brightdata":
+            return self._search_brightdata(query, str(api_key))
 
         raise ConfigurationError(
             f"Unknown FALLBACK_PROVIDER {provider!r}. "
-            "Supported values: 'scraperapi', 'apify'."
+            "Supported values: 'scraperapi', 'apify', 'brightdata'."
         )
 
     # ------------------------------------------------------------------
@@ -131,6 +138,39 @@ class FallbackApiProvider(ScrapeProvider):
         return [
             RawScrape(
                 source="fallback_apify",
+                url=target_url,
+                payload=response.text,
+            )
+        ]
+
+    def _search_brightdata(self, query: SearchQuery, api_key: str) -> list[RawScrape]:  # type: ignore[override]
+        """Fetch the Airbnb search page through Bright Data's Web Unlocker.
+
+        Pay-per-successful-request; returns the raw page body (``format: raw``)
+        which the LLM extractor then parses, just like the ScraperAPI path.
+        """
+        from config import settings
+
+        zone = getattr(settings, "BRIGHTDATA_ZONE", "") or "web_unlocker"
+        target_url = self._build_airbnb_url(query)
+        try:
+            response = self._http_client.post(
+                _BRIGHTDATA_URL,
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                },
+                json={"zone": zone, "url": target_url, "format": "raw"},
+            )
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            raise ScraperError(
+                f"Bright Data returned HTTP {exc.response.status_code}"
+            ) from exc
+
+        return [
+            RawScrape(
+                source="fallback_brightdata",
                 url=target_url,
                 payload=response.text,
             )

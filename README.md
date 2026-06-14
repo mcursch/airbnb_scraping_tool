@@ -37,8 +37,9 @@ Settings are read from environment variables or `.env` (see `config.py`):
 | `LLM_MODEL` | Extraction model | `claude-opus-4-8` |
 | `DB_PATH` | SQLite file | `scanner.db` |
 | `MAX_PAGES` | Pages to scrape per source | `3` |
-| `SCRAPER_API_KEY` | Optional paid scraping-API fallback key | — |
-| `FALLBACK_PROVIDER` | `scraperapi` or `apify` | `scraperapi` |
+| `SCRAPER_API_KEY` | Optional paid scraping-API fallback key (also the Bright Data API token) | — |
+| `FALLBACK_PROVIDER` | `scraperapi`, `apify`, or `brightdata` | `scraperapi` |
+| `BRIGHTDATA_ZONE` | Bright Data Web Unlocker zone name (when `FALLBACK_PROVIDER=brightdata`) | `web_unlocker` |
 | `BATCH_THRESHOLD` | Use the Batches API above this many scrapes | `10` |
 
 ## Usage
@@ -46,6 +47,9 @@ Settings are read from environment variables or `.env` (see `config.py`):
 ```bash
 # Run a scan (acquire -> extract -> store)
 python cli.py scan "Lisbon, Portugal" --checkin 2026-08-01 --checkout 2026-08-07 --guests 2
+
+# Use a cheaper extraction model (opus | sonnet | haiku | fable, or a full id)
+python cli.py scan "Lisbon, Portugal" --model sonnet
 
 # Acquire only (no LLM), or collect-but-don't-write
 python cli.py scan "Lisbon, Portugal" --no-extract
@@ -62,7 +66,7 @@ streamlit run dashboard/app.py
 ## Tests
 
 ```bash
-.venv/bin/python -m pytest        # 382 passing, 1 skipped (live network test)
+.venv/bin/python -m pytest        # 385 passing, 1 skipped (live network test)
 ```
 
 The live Airbnb network test is skipped unless `AIRBNB_LIVE_TEST=1` is set.

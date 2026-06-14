@@ -49,6 +49,7 @@ def extract_listings(
     session: Session,
     *,
     client: anthropic.Anthropic | None = None,
+    model: str | None = None,
 ) -> list[ListingExtraction]:
     """Extract structured listings from a list of raw scrapes.
 
@@ -71,6 +72,8 @@ def extract_listings(
     """
     if client is None:
         client = _get_default_client()
+    if model is None:
+        model = settings.llm_model
 
     results: list[ListingExtraction] = []
 
@@ -84,7 +87,7 @@ def extract_listings(
             raw_scrape.status = "failed"
             log = ExtractionLog(
                 raw_scrape_id=raw_scrape.id,
-                model=MODEL,
+                model=model,
                 status="failed",
                 error="Empty or blank payload; skipping extraction",
             )
@@ -103,7 +106,7 @@ def extract_listings(
             # complex" / "Grammar compilation timed out"). Ask for JSON and
             # validate with Pydantic instead.
             response = client.messages.create(
-                model=MODEL,
+                model=model,
                 max_tokens=8192,
                 system=[
                     {
@@ -129,7 +132,7 @@ def extract_listings(
 
             log = ExtractionLog(
                 raw_scrape_id=raw_scrape.id,
-                model=MODEL,
+                model=model,
                 input_tokens=getattr(usage, "input_tokens", None) if usage else None,
                 output_tokens=getattr(usage, "output_tokens", None) if usage else None,
                 cache_read_tokens=(
@@ -146,7 +149,7 @@ def extract_listings(
             raw_scrape.status = "failed"
             log = ExtractionLog(
                 raw_scrape_id=raw_scrape.id,
-                model=MODEL,
+                model=model,
                 status="failed",
                 error=str(exc),
             )

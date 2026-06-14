@@ -66,6 +66,7 @@ class PipelineResult:
 def run_search(
     query: SearchQuery,
     progress_callback: Callable[[float, str], None] | None = None,
+    model: str | None = None,
 ) -> PipelineResult:
     """Run the full pipeline for *query* and return a :class:`PipelineResult`.
 
@@ -128,7 +129,7 @@ def run_search(
             api_key=config_mod.settings.anthropic_api_key,
             max_retries=3,
         )
-        extractor = Extractor(client=client)
+        extractor = Extractor(client=client, model=model or config_mod.settings.llm_model)
     except Exception as exc:  # noqa: BLE001
         return PipelineResult(status="failed", error=f"Failed to build extractor: {exc}")
 

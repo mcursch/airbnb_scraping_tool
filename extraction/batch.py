@@ -59,6 +59,7 @@ def batch_extract(
     *,
     threshold: int | None = None,
     client: anthropic.Anthropic | None = None,
+    model: str | None = None,
 ) -> list[ListingExtraction]:
     """Extract listings, using the Message Batches API when above *threshold*.
 
@@ -84,15 +85,17 @@ def batch_extract(
     """
     if threshold is None:
         threshold = settings.batch_threshold
+    if model is None:
+        model = settings.llm_model
 
     if len(raw_scrapes) <= threshold:
         # Below threshold — delegate to the synchronous pipeline unchanged.
-        return extract_listings(raw_scrapes, session, client=client)
+        return extract_listings(raw_scrapes, session, client=client, model=model)
 
     if client is None:
         client = _get_default_client()
 
-    return _batch_extract_via_api(raw_scrapes, session, client)
+    return _batch_extract_via_api(raw_scrapes, session, client, model)
 
 
 # ---------------------------------------------------------------------------
@@ -100,7 +103,7 @@ def batch_extract(
 # ---------------------------------------------------------------------------
 
 
-def _build_batch_requests(raw_scrapes: list[RawScrape]) -> list[dict[str, Any]]:
+def _build_batch_requests(raw_scrapes: list[RawScrape], model: str) -> list[dict[str, Any]]:
     """Build the list of request dicts for the batch, one per raw scrape.
 
     Records whose payload cannot be pre-trimmed are silently excluded from
@@ -121,7 +124,7 @@ def _build_batch_requests(raw_scrapes: list[RawScrape]) -> list[dict[str, Any]]:
             {
                 "custom_id": str(raw_scrape.id),
                 "params": {
-                    "model": MODEL,
+                    "model": model,
                     "max_tokens": 4096,
                     "system": [
                         {
@@ -149,13 +152,14 @@ def _batch_extract_via_api(
     raw_scrapes: list[RawScrape],
     session: Session,
     client: anthropic.Anthropic,
+    model: str,
 ) -> list[ListingExtraction]:
     """Submit a batch, poll until done, ingest results."""
     # Build a lookup of id → RawScrape for fast result matching.
     scrape_by_id: dict[str, RawScrape] = {str(rs.id): rs for rs in raw_scrapes}
 
     # --- Build and submit the batch ---
-    batch_requests = _build_batch_requests(raw_scrapes)
+    batch_requests = _build_batch_requests(raw_scrapes, model)
 
     # Records that failed pretrim have no entry in batch_requests; mark them
     # failed now so they aren't left in "pending" after ingestion.
@@ -165,7 +169,7 @@ def _batch_extract_via_api(
             raw_scrape.status = "failed"
             log = ExtractionLog(
                 raw_scrape_id=raw_scrape.id,
-                model=MODEL,
+                model=model,
                 status="failed",
                 error="Payload failed pretrim; excluded from batch",
             )
@@ -202,7 +206,7 @@ def _batch_extract_via_api(
                 usage = getattr(message, "usage", None)
                 log = ExtractionLog(
                     raw_scrape_id=raw_scrape.id,
-                    model=MODEL,
+                    model=model,
                     input_tokens=getattr(usage, "input_tokens", None) if usage else None,
                     output_tokens=getattr(usage, "output_tokens", None) if usage else None,
                     cache_read_tokens=(
@@ -219,7 +223,7 @@ def _batch_extract_via_api(
                 raw_scrape.status = "failed"
                 log = ExtractionLog(
                     raw_scrape_id=raw_scrape.id,
-                    model=MODEL,
+                    model=model,
                     status="failed",
                     error=str(exc),
                 )
@@ -238,7 +242,7 @@ def _batch_extract_via_api(
             raw_scrape.status = "failed"
             log = ExtractionLog(
                 raw_scrape_id=raw_scrape.id,
-                model=MODEL,
+                model=model,
                 status="failed",
                 error=error_detail,
             )
@@ -252,7 +256,7 @@ def _batch_extract_via_api(
             raw_scrape.status = "failed"
             log = ExtractionLog(
                 raw_scrape_id=raw_scrape.id,
-                model=MODEL,
+                model=model,
                 status="failed",
                 error="No result returned by batch API for this record",
             )

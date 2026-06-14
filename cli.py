@@ -35,6 +35,23 @@ def _parse_date(value: str | None) -> date | None:
         raise click.BadParameter(f"Expected ISO date YYYY-MM-DD, got '{value}'")
 
 
+# Shorthands for the --model option. A value not in this map is passed through
+# verbatim (so a full model id like "claude-opus-4-7" also works).
+_MODEL_ALIASES = {
+    "opus": "claude-opus-4-8",
+    "sonnet": "claude-sonnet-4-6",
+    "haiku": "claude-haiku-4-5",
+    "fable": "claude-fable-5",
+}
+
+
+def _resolve_model(value: str | None) -> str | None:
+    """Map a --model shorthand to a model id; ``None`` → use the configured default."""
+    if value is None:
+        return None
+    return _MODEL_ALIASES.get(value.lower(), value)
+
+
 # ---------------------------------------------------------------------------
 # CLI group
 # ---------------------------------------------------------------------------
@@ -73,7 +90,11 @@ def _cmd_scan(args: types.SimpleNamespace) -> None:
             return
 
         threshold = 0 if getattr(args, "batch", False) else None
-        batch_extract(pending, session, threshold=threshold)
+        kwargs: dict = {"threshold": threshold}
+        model = getattr(args, "model", None)
+        if model:
+            kwargs["model"] = model
+        batch_extract(pending, session, **kwargs)
 
 
 @cli.command()
@@ -90,6 +111,12 @@ def _cmd_scan(args: types.SimpleNamespace) -> None:
 @click.option("--no-extract", is_flag=True, default=False, help="Acquire only; skip LLM extraction")
 @click.option("--batch", is_flag=True, default=False, help="Force Message Batches API for extraction")
 @click.option("--dry-run", is_flag=True, default=False, help="Collect payloads but write nothing to the database")
+@click.option(
+    "--model",
+    default=None,
+    help="Extraction model: opus | sonnet | haiku | fable, or a full model id "
+    "(default: opus). sonnet is ~5x cheaper than opus for extraction.",
+)
 def scan(
     area: str,
     checkin: str | None,
@@ -99,16 +126,18 @@ def scan(
     no_extract: bool,
     batch: bool,
     dry_run: bool,
+    model: str | None,
 ) -> None:
     """Run a full market scan for AREA.
 
     Example:
-        python cli.py scan "Lisbon, Portugal" --checkin 2025-08-01 --checkout 2025-08-07 --guests 2
+        python cli.py scan "Lisbon, Portugal" --checkin 2025-08-01 --checkout 2025-08-07 --guests 2 --model sonnet
     """
     from extraction.provider import Extractor
     from pipeline import Pipeline, run_search
     from schemas.models import SearchQuery
 
+    resolved_model = _resolve_model(model)
     sources_list = [s.strip() for s in sources.split(",") if s.strip() in ("airbnb", "booking")] or ["airbnb"]
     query = SearchQuery(
         area=area,
@@ -139,12 +168,12 @@ def scan(
         scrapers = _build_scrapers(sources_list)
         pipeline = Pipeline(scrapers=scrapers, extractor=Extractor(client=None))
         run_id = pipeline.run(query, no_extract=True)
-        _cmd_scan(types.SimpleNamespace(batch=True))
+        _cmd_scan(types.SimpleNamespace(batch=True, model=resolved_model))
         click.echo(f"Scan complete (batch): run {run_id}")
         return
 
     # --- normal: full acquire -> extract -> store -------------------------
-    result = run_search(query)
+    result = run_search(query, model=resolved_model)
     if result.status == "done":
         click.echo(f"Scan complete: run {result.run_id}")
     else:

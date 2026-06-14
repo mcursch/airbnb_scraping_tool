@@ -58,6 +58,16 @@ def apify_client() -> httpx.Client:
     return client
 
 
+@pytest.fixture()
+def brightdata_client() -> httpx.Client:
+    """An httpx.Client whose POST returns a raw HTML page (Web Unlocker)."""
+    client = MagicMock(spec=httpx.Client)
+    client.post.return_value = _mock_http_response(
+        "<html><body>Listing A – €120/night</body></html>"
+    )
+    return client
+
+
 # ── Helper: patch settings ────────────────────────────────────────────────────
 
 
@@ -210,6 +220,41 @@ class TestApifyHappyPath:
         for r in results:
             parsed = json.loads(r.payload)
             assert isinstance(parsed, list)
+
+
+# ── Bright Data happy path ────────────────────────────────────────────────────
+
+
+class TestBrightDataHappyPath:
+    def test_returns_raw_payload_objects(
+        self, query: SearchQuery, brightdata_client: httpx.Client
+    ) -> None:
+        provider = FallbackApiProvider(http_client=brightdata_client)
+        with _patch_settings(api_key="bd-token", provider="brightdata"):
+            results = provider.search(query)
+        assert len(results) > 0
+        assert all(isinstance(r, RawPayload) for r in results)
+
+    def test_source_is_fallback_brightdata(
+        self, query: SearchQuery, brightdata_client: httpx.Client
+    ) -> None:
+        provider = FallbackApiProvider(http_client=brightdata_client)
+        with _patch_settings(api_key="bd-token", provider="brightdata"):
+            results = provider.search(query)
+        assert all(r.source == "fallback_brightdata" for r in results)
+
+    def test_auth_header_and_request_body(
+        self, query: SearchQuery, brightdata_client: httpx.Client
+    ) -> None:
+        provider = FallbackApiProvider(http_client=brightdata_client)
+        with _patch_settings(api_key="bd-secret", provider="brightdata"):
+            provider.search(query)
+        call = brightdata_client.post.call_args
+        assert call.kwargs["headers"]["Authorization"] == "Bearer bd-secret"
+        body = call.kwargs["json"]
+        assert body["format"] == "raw"
+        assert body["zone"]  # zone name present (default web_unlocker)
+        assert "Lisbon" in body["url"] or "Lisbon%2C" in body["url"]
 
 
 # ── Unknown provider ──────────────────────────────────────────────────────────

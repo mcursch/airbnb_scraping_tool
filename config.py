@@ -28,7 +28,9 @@ class Settings(BaseSettings):
     rate_limit_min_seconds: float = 1.0
     rate_limit_max_seconds: float = 3.0
     SCRAPER_API_KEY: str = ""
-    FALLBACK_PROVIDER: str = "scraperapi"
+    FALLBACK_PROVIDER: str = "scraperapi"  # scraperapi | apify | brightdata
+    # Bright Data Web Unlocker zone name (used when FALLBACK_PROVIDER=brightdata)
+    BRIGHTDATA_ZONE: str = "web_unlocker"
 
     # Logging
     log_dir: str = "logs"
