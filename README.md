@@ -62,7 +62,7 @@ streamlit run dashboard/app.py
 ## Tests
 
 ```bash
-.venv/bin/python -m pytest        # 388 passing, 1 skipped (live network test)
+.venv/bin/python -m pytest        # 382 passing, 1 skipped (live network test)
 ```
 
 The live Airbnb network test is skipped unless `AIRBNB_LIVE_TEST=1` is set.
@@ -75,15 +75,18 @@ The live Airbnb network test is skipped unless `AIRBNB_LIVE_TEST=1` is set.
 
 ## Known limitations / remaining cleanup
 
-- There are still two `ListingExtraction` schemas: `schemas/listing.py`
-  (the page wrapper `{listings: [...]}`, used by both extraction paths) and a
-  legacy single-listing `schemas/models.py:ListingExtraction` (now unused by the
-  pipeline; kept only via `schemas/__init__`). Removing the legacy one is a
-  minor follow-up.
-- Scrapers target live sites and will need maintenance when Airbnb/Booking
-  change their markup or endpoints.
+- **Scraping is intermittent from datacenter/WSL IPs.** Airbnb often serves no
+  listing API response (challenge/login wall) and Booking returns an AWS WAF
+  challenge — both are detected and surfaced cleanly (no garbage stored), but
+  reliable data needs residential proxies or the paid fallback provider
+  (`SCRAPER_API_KEY`). Scrapers also need maintenance when the sites change.
+- Extraction sends the trimmed payload to Claude in JSON mode (the listing
+  schema is too rich for grammar-constrained structured output). One LLM call
+  per scraped page; cost ≈ $0.13 for a ~20-listing Lisbon page.
 
-Resolved recently: the four duplicate `SearchQuery` definitions were collapsed
-into one (`schemas/models.py`), and the interactive pipeline now extracts
-*all* listings from a scraped page (page→many), matching the bulk
-`extract_listings` / Batches path and sharing the same wrapper schema.
+Resolved: the four duplicate `SearchQuery` definitions and the two
+`ListingExtraction` schemas were each collapsed to one; the interactive pipeline
+extracts *all* listings per page (page→many) and writes `ExtractionLog` rows so
+the history page reports real counts/cost; `pretrim` preserves
+price/rating/beds; and both extraction paths use JSON mode end-to-end (verified
+live: a Lisbon scan stores 26 listings with price + rating).
