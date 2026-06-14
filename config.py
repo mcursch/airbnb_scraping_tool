@@ -36,10 +36,11 @@ class Settings(BaseSettings):
     # Extraction
     batch_threshold: int = 10  # use Batches API above this many scrapes
 
-    # claude-opus-4-8 pricing in USD per million tokens (MTok)
-    CLAUDE_OPUS_4_8_INPUT_PRICE_PER_MTOK: float = 15.0
-    CLAUDE_OPUS_4_8_OUTPUT_PRICE_PER_MTOK: float = 75.0
-    CLAUDE_OPUS_4_8_CACHE_READ_PRICE_PER_MTOK: float = 1.50
+    # claude-opus-4-8 pricing in USD per million tokens (MTok).
+    # Source: Anthropic pricing — $5 input / $25 output / $0.50 cache-read per MTok.
+    CLAUDE_OPUS_4_8_INPUT_PRICE_PER_MTOK: float = 5.0
+    CLAUDE_OPUS_4_8_OUTPUT_PRICE_PER_MTOK: float = 25.0
+    CLAUDE_OPUS_4_8_CACHE_READ_PRICE_PER_MTOK: float = 0.50
 
     @property
     def db_url(self) -> str:

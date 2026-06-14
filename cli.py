@@ -16,9 +16,8 @@ import click
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
-from airbnb_scraping_tool.db.models import SessionLocal, init_db
-from airbnb_scraping_tool.db.repo import Repo
-from db.models import Base, RawScrape
+from db.models import Base, RawScrape, SessionLocal, init_db
+from db.repo import Repo
 from extraction.batch import batch_extract
 
 
@@ -106,31 +105,51 @@ def scan(
     Example:
         python cli.py scan "Lisbon, Portugal" --checkin 2025-08-01 --checkout 2025-08-07 --guests 2
     """
-    if dry_run:
-        from airbnb_scraping_tool.extraction.extractor import Extractor
-        from airbnb_scraping_tool.schemas import SearchQuery
-        from pipeline import Pipeline
+    from extraction.provider import Extractor
+    from pipeline import Pipeline, run_search
+    from schemas.models import SearchQuery
 
-        sources_list = [s.strip() for s in sources.split(",") if s.strip() in ("airbnb", "booking")]
+    sources_list = [s.strip() for s in sources.split(",") if s.strip() in ("airbnb", "booking")] or ["airbnb"]
+    query = SearchQuery(
+        area=area,
+        checkin=_parse_date(checkin),
+        checkout=_parse_date(checkout),
+        guests=guests,
+        sources=sources_list,  # type: ignore[arg-type]
+    )
+
+    # --- dry run: collect payloads, write nothing -------------------------
+    if dry_run:
         scrapers = _build_scrapers(sources_list)
-        extractor = Extractor(client=None)
-        query = SearchQuery(area=area, sources=sources_list or ["airbnb"])  # type: ignore[arg-type]
-        pipeline = Pipeline(scrapers=scrapers, extractor=extractor)
+        pipeline = Pipeline(scrapers=scrapers, extractor=Extractor(client=None))
         pipeline.run(query, dry_run=True)
         click.echo("Dry run complete")
         return
 
-    args = types.SimpleNamespace(
-        area=area,
-        checkin=checkin,
-        checkout=checkout,
-        guests=guests,
-        sources=sources,
-        no_extract=no_extract,
-        batch=batch,
-        dry_run=False,
-    )
-    _cmd_scan(args)
+    # --- acquire only: persist RawScrape rows, skip the LLM ---------------
+    if no_extract:
+        scrapers = _build_scrapers(sources_list)
+        pipeline = Pipeline(scrapers=scrapers, extractor=Extractor(client=None))
+        run_id = pipeline.run(query, no_extract=True)
+        click.echo(f"Acquire complete (no extract): run {run_id}")
+        return
+
+    # --- batch: acquire, then extract pending rows via the Batches API ----
+    if batch:
+        scrapers = _build_scrapers(sources_list)
+        pipeline = Pipeline(scrapers=scrapers, extractor=Extractor(client=None))
+        run_id = pipeline.run(query, no_extract=True)
+        _cmd_scan(types.SimpleNamespace(batch=True))
+        click.echo(f"Scan complete (batch): run {run_id}")
+        return
+
+    # --- normal: full acquire -> extract -> store -------------------------
+    result = run_search(query)
+    if result.status == "done":
+        click.echo(f"Scan complete: run {result.run_id}")
+    else:
+        click.echo(f"Scan failed: {result.error}", err=True)
+        raise SystemExit(1)
 
 
 def _build_scrapers(sources: list[str]):  # noqa: ANN201
@@ -144,14 +163,14 @@ def _build_scrapers(sources: list[str]):  # noqa: ANN201
     # is not installed.
     if "airbnb" in sources:
         try:
-            from airbnb_scraping_tool.scrapers.airbnb import AirbnbScraper  # type: ignore[import]
+            from scrapers.airbnb import AirbnbScraper  # type: ignore[import]
             scrapers.append(AirbnbScraper())
         except ImportError:
             click.echo("Warning: Airbnb scraper not available (install playwright).", err=True)
 
     if "booking" in sources:
         try:
-            from airbnb_scraping_tool.scrapers.booking import BookingScraper  # type: ignore[import]
+            from scrapers.booking import BookingScraper  # type: ignore[import]
             scrapers.append(BookingScraper())
         except ImportError:
             click.echo("Warning: Booking.com scraper not available.", err=True)

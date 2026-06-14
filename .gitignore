@@ -1,73 +1,7 @@
-# Log files
-logs/*.jsonl
-
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-.venv/
-.mypy_cache/
-# SQLite databases
-*.db
-*.sqlite
-*.sqlite3
-
-# Python bytecode
-__pycache__/
-**/__pycache__/
-*.py[cod]
-*.pyo
-
-# pytest cache
-.pytest_cache/
-
-# Distribution / packaging
-*.egg-info/
-dist/
-build/
-
-# Virtualenvs
-.venv/
-venv/
-env/
-*.db
-.env
-# Byte-compiled / optimized / DLL files
+# Byte-compiled / optimized / cache
 __pycache__/
 *.py[cod]
 *$py.class
-*.pyc
-*.py[cod]
-*.pyo
-
-# SQLite databases
-*.db
-*.sqlite3
-
-# Environment files
-.env
-.env.*
-
-# Distribution / packaging
-dist/
-build/
-*.egg-info/
-*.egg
-# Byte-compiled / optimized / DLL files
-__pycache__/
-*.py[cod]
-*.pyo
-# Python bytecode / cache
-__pycache__/
-*.py[cod]
-*.pyc
-*.pyo
-
-# Distribution / packaging
-*.egg-info/
-dist/
-build/
-.eggs/
 
 # Virtual environments
 .venv/
@@ -75,60 +9,35 @@ venv/
 env/
 
 # Distribution / packaging
-dist/
 build/
+dist/
 *.egg-info/
+*.egg
+.eggs/
 
-# Environment files
-.env
-.env.local
-
-# Test / coverage
+# Test / lint / type caches
 .pytest_cache/
+.ruff_cache/
+.mypy_cache/
 .coverage
 htmlcov/
 
-# IDE
-.idea/
-.vscode/
+# SQLite databases
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+logs/*.jsonl
+
 # Environment / secrets
 .env
+.env.*
+!.env.example
 
 # uv
 .uv/
 
-# Test / lint caches
-.pytest_cache/
-.ruff_cache/
-.mypy_cache/
-.coverage
-htmlcov/
-
 # OS artefacts
 .DS_Store
 Thumbs.db
-*.py[cod]
-.venv/
-*.sqlite
-.env
-.pytest_cache/
-.venv/
-# Test / coverage artifacts
-.pytest_cache/
-.coverage
-htmlcov/
-
-# Local database
-*.db
-
-# Environment files
-.env
-# Pytest cache
-.pytest_cache/
-
-# Ruff / mypy caches
-.ruff_cache/
-.mypy_cache/
-
-# OS
-.DS_Store

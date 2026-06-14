@@ -17,11 +17,12 @@ import pytest
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 
-from airbnb_scraping_tool.db.models import Base, ExtractionLog, ListingSnapshot, RawScrape, SearchRun
-from airbnb_scraping_tool.db.repo import Repo
-from airbnb_scraping_tool.extraction.extractor import ExtractionResult, Extractor
-from airbnb_scraping_tool.schemas import ListingExtraction, RawPayload, SearchQuery
-from airbnb_scraping_tool.scrapers.base import ScrapeProvider
+from db.models import Base, ExtractionLog, ListingSnapshot, RawScrape, SearchRun
+from db.repo import Repo
+from extraction.provider import ExtractionResult, Extractor
+from schemas.listing import ExtractedListing
+from schemas.models import SearchQuery
+from scrapers.base import RawPayload, ScrapeProvider
 
 
 # ---------------------------------------------------------------------------
@@ -33,8 +34,8 @@ def _hash(text: str) -> str:
     return hashlib.sha256(text.encode()).hexdigest()
 
 
-def _make_listing_extraction(idx: int = 1) -> ListingExtraction:
-    return ListingExtraction(
+def _make_listing_extraction(idx: int = 1) -> ExtractedListing:
+    return ExtractedListing(
         source_listing_id=f"id-{idx}",
         name=f"Listing {idx}",
         url=f"https://airbnb.com/rooms/{idx}",

@@ -10,11 +10,10 @@ import pytest
 from sqlalchemy import create_engine, event, inspect
 from sqlalchemy.orm import Session, sessionmaker
 
-from airbnb_scraping_tool.db.models import Base as AirbnbBase
-from airbnb_scraping_tool.db.repo import Repo
 import db.models as root_db_models
+from db.models import Base as AirbnbBase
 from db.models import Listing, ListingSnapshot, SearchRun
-from db.repo import create_all, get_engine
+from db.repo import Repo, create_all, get_engine
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 

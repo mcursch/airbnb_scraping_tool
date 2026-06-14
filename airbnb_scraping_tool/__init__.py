@@ -1,1 +1,0 @@
-# Short-Stay Market Scanner
