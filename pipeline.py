@@ -119,6 +119,9 @@ def run_search(
         client = anthropic.Anthropic(
             api_key=config_mod.settings.anthropic_api_key,
             max_retries=3,
+            # Hard per-request timeout so a stalled extraction/enrichment call
+            # can never hang the whole run (web_search turns are bounded too).
+            timeout=180.0,
         )
         extractor = Extractor(client=client, model=model or config_mod.settings.llm_model)
     except Exception as exc:  # noqa: BLE001

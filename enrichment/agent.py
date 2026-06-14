@@ -39,9 +39,18 @@ from schemas.listing import ExtractedListing
 
 logger = logging.getLogger(__name__)
 
-# Server-tool type identifiers (GA versions with dynamic filtering).
-_WEB_SEARCH_TOOL = {"type": "web_search_20260209", "name": "web_search"}
-_WEB_FETCH_TOOL = {"type": "web_fetch_20260209", "name": "web_fetch"}
+# Server-tool identifier. We use web_search only: its results already include
+# filtered page content (dynamic filtering), and unlike web_fetch it does not
+# run inside a code-execution container (which would require threading a
+# container_id across pause_turn continuations). ``max_uses`` bounds how many
+# searches the model runs per request so one call can't run for minutes (a
+# listing can have 20+ gaps; uncapped, the model searches each one serially).
+_WEB_SEARCH_MAX_USES = 6
+_WEB_SEARCH_TOOL = {
+    "type": "web_search_20260209",
+    "name": "web_search",
+    "max_uses": _WEB_SEARCH_MAX_USES,
+}
 
 # Fields worth the cost of enrichment — the expanded categories plus a few
 # commonly-missing core attributes. Identity/price fields that the scraper
@@ -92,8 +101,8 @@ SYSTEM_PROMPT = (
     "Process for each missing field:\n"
     "1. Reason about the best way to obtain it (the listing's own page, the host/brand "
     "site, a licensing registry, a maps/geocoding source, review aggregators, etc.).\n"
-    "2. Use web_search and web_fetch to actually find it. Prefer the listing's own "
-    "platform page and other authoritative sources.\n"
+    "2. Use web_search to actually find it (search result content is provided "
+    "inline). Prefer the listing's own platform page and other authoritative sources.\n"
     "3. Only report a field if you find a credible source for it. Never guess or "
     "fabricate. If you cannot find a field, omit it.\n\n"
     "When done, call submit_enrichment with one entry per field you could fill, each "
@@ -226,11 +235,16 @@ class EnrichmentAgent:
         client: Any | None = None,
         model: str | None = None,
         *,
-        max_loops: int = 6,
+        max_loops: int = 4,
+        max_fields: int | None = None,
     ) -> None:
         self._client = client
         self._model = model or settings.enrich_model
         self._max_loops = max_loops
+        # Cap how many gaps we research per listing. Each field costs ~1 web
+        # search, and a request that searches 20+ fields serially runs for
+        # minutes; bounding the field count keeps each call fast and cheap.
+        self._max_fields = max_fields or settings.enrich_max_fields
 
     @property
     def model(self) -> str:
@@ -252,6 +266,10 @@ class EnrichmentAgent:
         if self._client is None:
             raise RuntimeError("No Anthropic client configured for enrichment.")
 
+        # Research only the highest-priority gaps (IMPORTANT_FIELDS order) so a
+        # single call stays bounded in time and cost.
+        gaps = gaps[: self._max_fields]
+
         gap_lines = "\n".join(
             f"- {name}: {ExtractedListing.model_fields[name].description}" for name in gaps
         )
@@ -264,16 +282,16 @@ class EnrichmentAgent:
             "Call submit_enrichment when finished."
         )
 
-        tools = [_WEB_SEARCH_TOOL, _WEB_FETCH_TOOL, _submit_tool()]
+        tools = [_WEB_SEARCH_TOOL, _submit_tool()]
         messages: list[dict[str, Any]] = [{"role": "user", "content": user_prompt}]
         result = EnrichmentResult()
+        container: Any = None
 
         try:
             for _ in range(self._max_loops):
-                resp = self._client.messages.create(
+                kwargs: dict[str, Any] = dict(
                     model=self._model,
-                    max_tokens=8192,
-                    thinking={"type": "adaptive"},
+                    max_tokens=4096,
                     system=[
                         {
                             "type": "text",
@@ -284,7 +302,15 @@ class EnrichmentAgent:
                     tools=tools,
                     messages=messages,
                 )
+                # Carry the server-tool container across pause_turn continuations
+                # if the API ever returns one (required for container-backed tools).
+                if container is not None:
+                    kwargs["container"] = container
+                resp = self._client.messages.create(**kwargs)
                 self._accumulate_usage(result, resp.usage)
+                resp_container = getattr(resp, "container", None)
+                if resp_container is not None:
+                    container = getattr(resp_container, "id", resp_container)
 
                 submit = next(
                     (
