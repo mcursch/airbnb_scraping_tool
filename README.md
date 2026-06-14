@@ -59,14 +59,14 @@ python cli.py scan "Lisbon, Portugal" --dry-run
 python cli.py purge-run <RUN_ID>
 python cli.py vacuum
 
-# Dashboard
+# Dashboard (Search page lets you click an area on a map, or type one)
 streamlit run dashboard/app.py
 ```
 
 ## Tests
 
 ```bash
-.venv/bin/python -m pytest        # 385 passing, 1 skipped (live network test)
+.venv/bin/python -m pytest        # 394 passing, 1 skipped (live network test)
 ```
 
 The live Airbnb network test is skipped unless `AIRBNB_LIVE_TEST=1` is set.

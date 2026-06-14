@@ -23,6 +23,57 @@ if _repo_root not in sys.path:
     sys.path.insert(0, _repo_root)
 
 from pipeline import PipelineResult, SearchQuery, run_search  # noqa: E402
+from geocode import reverse_geocode  # noqa: E402
+
+# Default map view (Lisbon) used until the user clicks somewhere.
+_DEFAULT_CENTER = [38.7223, -9.1393]
+
+
+def _render_area_picker() -> None:
+    """Interactive map: clicking a point sets the search area via reverse geocode.
+
+    Must be rendered *outside* the search form (forms suppress the per-click
+    reruns that ``st_folium`` relies on). Writes the resolved name into
+    ``st.session_state["area"]`` so the form's text input picks it up.
+    """
+    import folium
+    from streamlit_folium import st_folium
+
+    st.session_state.setdefault("area", "")
+    st.session_state.setdefault("map_center", _DEFAULT_CENTER)
+    st.session_state.setdefault("picked_coords", None)
+
+    st.subheader("📍 Pick an area on the map")
+    st.caption("Click anywhere to set the search area — or just type it in the box below.")
+
+    fmap = folium.Map(location=st.session_state["map_center"], zoom_start=4, control_scale=True)
+    if st.session_state["picked_coords"]:
+        folium.Marker(
+            st.session_state["picked_coords"],
+            tooltip=st.session_state["area"] or "Selected area",
+            icon=folium.Icon(color="red", icon="home"),
+        ).add_to(fmap)
+
+    map_state = st_folium(fmap, height=380, use_container_width=True, key="area_map")
+
+    clicked = (map_state or {}).get("last_clicked")
+    if clicked:
+        coords = (round(clicked["lat"], 6), round(clicked["lng"], 6))
+        if coords != st.session_state.get("picked_coords"):
+            with st.spinner("Looking up area…"):
+                name = reverse_geocode(coords[0], coords[1])
+            st.session_state["picked_coords"] = coords
+            st.session_state["map_center"] = [coords[0], coords[1]]
+            if name:
+                st.session_state["area"] = name
+                st.rerun()  # redraw marker + populate the area input
+            else:
+                st.warning(
+                    "Couldn't resolve that point to a place name — type the area manually below."
+                )
+
+    if st.session_state["area"]:
+        st.success(f"Selected area: **{st.session_state['area']}**")
 
 
 def _run_in_thread(
@@ -42,15 +93,19 @@ def _run_in_thread(
 def render() -> None:
     st.title("🔍 Search Listings")
     st.write(
-        "Enter your search parameters below. "
+        "Pick an area on the map (or type one), set your parameters, and search. "
         "Results will be available on the **Results** page once the run completes."
     )
+
+    # Map-based area picker (outside the form so clicks register immediately).
+    _render_area_picker()
 
     with st.form("search_form"):
         area = st.text_input(
             "Area *",
+            key="area",
             placeholder="e.g. Lisbon, Portugal",
-            help="City, region, or neighbourhood to search.",
+            help="Click the map above, or type a city / region / neighbourhood.",
         )
 
         col1, col2 = st.columns(2)
@@ -106,21 +161,20 @@ def render() -> None:
             st.error(msg)
         return
 
-    # ── Normalise sources ─────────────────────────────────────────────────────
+    # ── Normalise sources → list of valid Source literals ─────────────────────
     selected = {s.lower() for s in source_options}
-    if selected == {"airbnb", "hotels"}:
-        sources_str = "both"
-    elif "airbnb" in selected:
-        sources_str = "airbnb"
-    else:
-        sources_str = "hotels"
+    sources_list: list[str] = []
+    if "airbnb" in selected:
+        sources_list.append("airbnb")
+    if "hotels" in selected:
+        sources_list.append("booking")  # the "Hotels" source is Booking.com
 
     query = SearchQuery(
         area=area.strip(),
         checkin=checkin if isinstance(checkin, date) else None,
         checkout=checkout if isinstance(checkout, date) else None,
         guests=int(guests),
-        sources=sources_str,
+        sources=sources_list or ["airbnb"],  # type: ignore[arg-type]
     )
 
     # ── Run pipeline in background thread ─────────────────────────────────────

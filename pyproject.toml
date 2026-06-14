@@ -20,6 +20,8 @@ dependencies = [
     "lxml>=5.2",
     "pandas>=2.0",
     "streamlit>=1.30",
+    "folium>=0.16",
+    "streamlit-folium>=0.20",
 ]
 
 [project.optional-dependencies]
