@@ -51,6 +51,7 @@ def enrich_run(
     model: str | None = None,
     max_listings: int | None = None,
     min_gaps: int | None = None,
+    max_fields: int | None = None,
     progress_callback: Callable[[float, str], None] | None = None,
 ) -> dict[str, Any]:
     """Enrich the gappiest listings of *run_id* in place.
@@ -73,7 +74,9 @@ def enrich_run(
     client = anthropic.Anthropic(
         api_key=settings.anthropic_api_key, max_retries=0, timeout=110.0
     )
-    agent = EnrichmentAgent(client=client, model=model or settings.enrich_model)
+    agent = EnrichmentAgent(
+        client=client, model=model or settings.enrich_model, max_fields=max_fields
+    )
 
     summary: dict[str, Any] = {
         "selected": 0, "processed": 0, "enriched_count": 0,

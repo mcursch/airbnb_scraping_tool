@@ -109,6 +109,24 @@ def render() -> None:
         "Results will be available on the **Results** page once the run completes."
     )
 
+    # Preset demo loader — seeds findable hotels with blank fields so the
+    # enrichment feature can be demoed reliably (no live scraping needed).
+    with st.expander("🎬 Demo: load preset hotels (then enrich on the Results page)"):
+        st.caption(
+            "Loads 5 real Lisbon hotels with blank details. Go to **Results**, "
+            "pick the demo run, and click **Enrich now** to watch the blanks fill "
+            "with web-sourced data + citations."
+        )
+        if st.button("🎬 Load hotel demo", use_container_width=True):
+            from demo.seed import seed_demo_run
+
+            run_id = seed_demo_run()
+            st.session_state["last_run_id"] = run_id
+            st.success(
+                f"Loaded demo run **#{run_id}** (5 Lisbon hotels). "
+                "Open the **Results** page, select it, and click **Enrich now**."
+            )
+
     # Map-based area picker (outside the form so clicks register immediately).
     _render_area_picker()
 

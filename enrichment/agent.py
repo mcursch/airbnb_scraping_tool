@@ -56,14 +56,21 @@ _WEB_SEARCH_TOOL = {
 # Fields worth the cost of enrichment — the expanded categories plus a few
 # commonly-missing core attributes. Identity/price fields that the scraper
 # reliably provides are intentionally excluded.
+# Ordered by research priority: the highest-value fields that are reliably
+# findable for hotels/branded properties come first, so a capped run fills the
+# most useful (and dashboard-visible) blanks before spending searches on the
+# long tail.
 IMPORTANT_FIELDS: tuple[str, ...] = (
-    # core, often missing on search-results pages
-    "property_type",
+    # high-value & reliably findable (front-loaded; also the visible table cols)
     "rating",
     "review_count",
     "host_or_brand",
-    # host & trust signals
     "host_is_superhost",
+    "checkin_time",
+    "checkout_time",
+    "cancellation_policy",
+    "neighborhood",
+    # remaining host & trust signals
     "host_response_rate",
     "host_response_time",
     "years_hosting",
@@ -71,23 +78,19 @@ IMPORTANT_FIELDS: tuple[str, ...] = (
     "rating_location",
     "rating_value",
     "license_number",
-    # pricing breakdown
+    "property_type",
+    # location & policies
+    "distance_to_center_km",
+    "instant_book",
+    "pets_allowed",
+    "smoking_allowed",
+    "events_allowed",
+    # pricing breakdown (per-stay)
     "cleaning_fee",
     "service_fee",
     "taxes",
     "deposit",
     "minimum_nights",
-    # location precision
-    "neighborhood",
-    "distance_to_center_km",
-    # policies & rules
-    "cancellation_policy",
-    "checkin_time",
-    "checkout_time",
-    "instant_book",
-    "pets_allowed",
-    "smoking_allowed",
-    "events_allowed",
 )
 
 # Fields that live on ListingSnapshot rather than Listing (per-stay pricing).

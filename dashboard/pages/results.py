@@ -53,15 +53,20 @@ def _render_enrich_control(run_id: int, df) -> None:
             "researches the web and records a source + confidence for each value. "
             "Costs extra LLM tokens + web searches (~$0.15 and ~80s per listing)."
         )
-        c1, c2, c3 = st.columns([1.2, 1.6, 1.2])
+        c1, c2, c3, c4 = st.columns([1.2, 1.2, 1.4, 1.2])
         with c1:
             n = st.number_input(
-                "Listings to enrich", min_value=1, max_value=10, value=3, step=1,
+                "Listings to enrich", min_value=1, max_value=10, value=2, step=1,
                 help="The gappiest listings are enriched first.",
             )
         with c2:
-            st.metric("Blank cells in shown fields", f"{blanks:,}")
+            fields = st.number_input(
+                "Fields per listing", min_value=1, max_value=12, value=6, step=1,
+                help="How many blanks to research per listing (each ≈ one web search).",
+            )
         with c3:
+            st.metric("Blank cells in shown fields", f"{blanks:,}")
+        with c4:
             st.write("")
             go = st.button("✨ Enrich now", type="primary", use_container_width=True)
 
@@ -74,7 +79,9 @@ def _render_enrich_control(run_id: int, df) -> None:
             bar.progress(min(max(frac, 0.0), 1.0), text=msg)
 
         with st.spinner("Researching the web to fill blanks…"):
-            summary = enrich_run(run_id, max_listings=int(n), progress_callback=_cb)
+            summary = enrich_run(
+                run_id, max_listings=int(n), max_fields=int(fields), progress_callback=_cb
+            )
         bar.progress(1.0, text="Done.")
         st.success(
             f"Enriched **{summary['enriched_count']}/{summary['selected']}** listings · "
