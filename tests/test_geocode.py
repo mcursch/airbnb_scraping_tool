@@ -55,6 +55,11 @@ class TestReverseGeocode:
         assert call.kwargs["params"]["lat"] == 38.72
         assert call.kwargs["params"]["lon"] == -9.14
 
+    def test_requests_english_place_names(self):
+        client = _mock_client({"address": {"city": "Tokyo", "country": "Japan"}})
+        reverse_geocode(35.68, 139.65, http_client=client)
+        assert client.get.call_args.kwargs["params"]["accept-language"] == "en"
+
     def test_http_error_returns_none(self):
         client = _mock_client({}, status_code=503)
         assert reverse_geocode(0.0, 0.0, http_client=client) is None

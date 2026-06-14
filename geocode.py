@@ -25,6 +25,7 @@ def reverse_geocode(
     *,
     http_client: httpx.Client | None = None,
     zoom: int = 10,
+    lang: str = "en",
 ) -> str | None:
     """Resolve ``(lat, lon)`` to a concise "City, Country" area name, or ``None``.
 
@@ -37,6 +38,11 @@ def reverse_geocode(
         short-lived client is created and closed when omitted.
     zoom:
         Nominatim address-detail level (10 ≈ city). Lower = broader.
+    lang:
+        Preferred language for place names (Nominatim ``accept-language``).
+        Defaults to English so areas come back as e.g. "Tokyo, Japan" rather
+        than the local-script name — more usable and matched more reliably by
+        the scrapers.
     """
     client = http_client or httpx.Client(timeout=10.0)
     try:
@@ -48,6 +54,7 @@ def reverse_geocode(
                 "format": "jsonv2",
                 "zoom": zoom,
                 "addressdetails": 1,
+                "accept-language": lang,
             },
             headers={"User-Agent": _USER_AGENT},
         )

@@ -1,0 +1,18 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "dashboard",
+      "runtimeExecutable": "wsl",
+      "runtimeArgs": [
+        "-d",
+        "ubuntu",
+        "--",
+        "bash",
+        "-lc",
+        "cd /home/mcurschman/projects/airbnb_scraping_tool && .venv/bin/python -m streamlit run dashboard/app.py --server.headless true --server.port 8501 --server.address 0.0.0.0 --browser.gatherUsageStats false"
+      ],
+      "port": 8501
+    }
+  ]
+}
