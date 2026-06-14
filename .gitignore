@@ -38,6 +38,10 @@ logs/*.jsonl
 # uv
 .uv/
 
+# Local scratch / helper scripts (used for ad-hoc runs; never committed)
+_*.sh
+cleanup_helpers.sh
+
 # OS artefacts
 .DS_Store
 Thumbs.db
