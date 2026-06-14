@@ -97,7 +97,7 @@ def engine_and_session():
 # ---------------------------------------------------------------------------
 
 
-def _run_pipeline_with_session(engine, query, scrapers, extractor, fallback=None):
+def _run_pipeline_with_session(engine, query, scrapers, extractor, fallback=None, enricher=None):
     """Run the pipeline but patch SessionLocal to use an in-memory engine."""
     import db.models as models_mod
 
@@ -125,7 +125,9 @@ def _run_pipeline_with_session(engine, query, scrapers, extractor, fallback=None
     try:
         from pipeline import Pipeline
 
-        pipeline = Pipeline(scrapers=scrapers, extractor=extractor, fallback=fallback)
+        pipeline = Pipeline(
+            scrapers=scrapers, extractor=extractor, fallback=fallback, enricher=enricher
+        )
         run_id = pipeline.run(query)
         return run_id
     finally:
@@ -496,6 +498,98 @@ class TestFallbackAutoEngages:
         assert run.status == "done"
         assert run.stats["total_listings"] == 0
         assert run.stats["fallback_engaged"] is False
+
+
+# ---------------------------------------------------------------------------
+# Enrichment pass integration (Pipeline.run with an enricher)
+# ---------------------------------------------------------------------------
+
+
+class FakeEnricher:
+    """Returns a fixed EnrichmentResult for every listing (no LLM/network)."""
+
+    def __init__(self, filled: dict):
+        from enrichment.agent import EnrichmentResult
+
+        self._filled = filled
+        self._Result = EnrichmentResult
+        self.calls = 0
+
+    def enrich(self, listing_ex, *, source):  # noqa: ARG002
+        self.calls += 1
+        prov = {k: {"value": v, "confidence": 0.9, "source_url": "https://x",
+                    "reasoning": "test"} for k, v in self._filled.items()}
+        return self._Result(
+            filled=dict(self._filled), provenance=prov,
+            input_tokens=10, output_tokens=5, web_search_count=2, status="enriched",
+        )
+
+
+class TestEnrichmentPass:
+    def test_pipeline_applies_enrichment(self):
+        from db.models import ListingSnapshot
+
+        eng = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
+        Base.metadata.create_all(eng)
+        Session = sessionmaker(bind=eng, autoflush=False, autocommit=False)
+
+        raw = _make_raw_payload("enrich-content")
+        # A sparse listing → many missing important fields (≥ enrich_min_gaps).
+        extraction = ExtractionResult(
+            listings=[_make_listing_extraction(source_listing_id="E1", name="Sparse Flat")],
+            input_tokens=10, output_tokens=5, status="ok",
+        )
+        enricher = FakeEnricher({"neighborhood": "Chiado", "cleaning_fee": 50.0})
+
+        run_id = _run_pipeline_with_session(
+            eng,
+            query=SearchQuery(area="Lisbon", sources=["airbnb"]),
+            scrapers=[FakeScraper([raw])],
+            extractor=FakeExtractor([extraction]),
+            enricher=enricher,
+        )
+
+        with Session() as sess:
+            run = sess.get(SearchRun, run_id)
+            listing = sess.scalars(select(Listing)).first()
+            snap = sess.scalars(
+                select(ListingSnapshot).where(ListingSnapshot.run_id == run_id)
+            ).first()
+
+        assert enricher.calls == 1
+        # Listing-level field applied
+        assert listing.neighborhood == "Chiado"
+        # Snapshot-level field applied
+        assert snap.cleaning_fee == 50.0
+        # Provenance + status stored
+        assert listing.enrichment["neighborhood"]["source_url"] == "https://x"
+        assert listing.enrichment_status == "enriched"
+        # Stats recorded
+        assert run.stats["enriched_count"] == 1
+        assert run.stats["enrich_searches"] == 2
+
+    def test_no_enricher_means_no_enrichment(self):
+        eng = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
+        Base.metadata.create_all(eng)
+        Session = sessionmaker(bind=eng, autoflush=False, autocommit=False)
+
+        raw = _make_raw_payload("plain-content")
+        extraction = ExtractionResult(
+            listings=[_make_listing_extraction()], input_tokens=10, output_tokens=5, status="ok",
+        )
+        run_id = _run_pipeline_with_session(
+            eng,
+            query=SearchQuery(area="Lisbon", sources=["airbnb"]),
+            scrapers=[FakeScraper([raw])],
+            extractor=FakeExtractor([extraction]),
+            enricher=None,
+        )
+        with Session() as sess:
+            run = sess.get(SearchRun, run_id)
+            listing = sess.scalars(select(Listing)).first()
+
+        assert run.stats["enriched_count"] == 0
+        assert listing.enrichment_status is None
 
 
 # ---------------------------------------------------------------------------

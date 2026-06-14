@@ -94,6 +94,25 @@ _KEEP_SUBSTRINGS: tuple[str, ...] = (
     "checkout",
     "available",
     "id",
+    # ── Expanded field categories: host/trust, pricing, location, policies ──
+    "host",        # host name, superhost badge, hosting tenure
+    "superhost",
+    "response",    # host response rate / time
+    "cleanliness", # cleanliness sub-rating
+    "license",     # rental licence / registration number
+    "registration",
+    "cleaning",    # cleaning fee
+    "tax",         # taxes / occupancy fees
+    "deposit",
+    "minimum",     # minimum nights
+    "neighborhood",
+    "neighbourhood",
+    "district",
+    "distance",
+    "cancellation",
+    "policy",
+    "rule",        # house rules (pets/smoking/events live here)
+    "instant",     # instant book
 )
 
 #: Substrings in a key name that signal noise.  Checked first; a match causes

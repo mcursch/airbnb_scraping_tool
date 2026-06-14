@@ -20,6 +20,13 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     llm_model: str = "claude-opus-4-8"
 
+    # Enrichment (reason-and-act web research to fill missing fields)
+    enrich_model: str = "claude-opus-4-8"
+    enrich_max_listings: int = 5   # cap enriched listings per run (cost control)
+    enrich_min_gaps: int = 3       # only enrich listings missing ≥ this many fields
+    # Approx. Anthropic web-search billing: ~$10 per 1,000 search requests.
+    WEB_SEARCH_PRICE_PER_REQUEST: float = 0.01
+
     # Scraping
     max_pages: int = 3
     request_delay_min: float = 1.0

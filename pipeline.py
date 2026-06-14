@@ -67,6 +67,8 @@ def run_search(
     query: SearchQuery,
     progress_callback: Callable[[float, str], None] | None = None,
     model: str | None = None,
+    enrich: bool = False,
+    enrich_model: str | None = None,
 ) -> PipelineResult:
     """Run the full pipeline for *query* and return a :class:`PipelineResult`.
 
@@ -147,9 +149,26 @@ def run_search(
         except Exception as exc:  # noqa: BLE001
             logger.warning("Fallback provider unavailable (%s); continuing without it.", exc)
 
+    # Build the reason-and-act enrichment agent when requested. It reuses the
+    # same Anthropic client and fills missing fields via web search/fetch.
+    enricher: Any | None = None
+    if enrich:
+        try:
+            from enrichment.agent import EnrichmentAgent
+
+            enricher = EnrichmentAgent(
+                client=client,
+                model=enrich_model or config_mod.settings.enrich_model,
+            )
+            _progress(0.14, "Enrichment agent ready…")
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Enrichment agent unavailable (%s); continuing without it.", exc)
+
     _progress(0.15, "Starting pipeline…")
 
-    pipeline = Pipeline(scrapers=scrapers, extractor=extractor, fallback=fallback)
+    pipeline = Pipeline(
+        scrapers=scrapers, extractor=extractor, fallback=fallback, enricher=enricher
+    )
 
     try:
         run_id = pipeline.run(query)
@@ -403,12 +422,14 @@ class Pipeline:
         repo: Repo | None = None,
         session_factory: Any | None = None,
         fallback: Any | None = None,
+        enricher: Any | None = None,
     ) -> None:
         self._scrapers = scrapers
         self._extractor = extractor
         self._repo = repo if repo is not None else Repo()
         self._session_factory = session_factory
         self._fallback = fallback
+        self._enricher = enricher
         self._cancel_flag = threading.Event()
 
     # ------------------------------------------------------------------
@@ -432,6 +453,85 @@ class Pipeline:
         entry.update(extra)
         log_file.write(json.dumps(entry) + "\n")
         log_file.flush()
+
+    def _run_enrichment(
+        self,
+        sess: Any,
+        candidates: list[tuple[int, Any, Any, str]],
+        stats: dict[str, Any],
+        lf: Any,
+    ) -> None:
+        """Fill missing important fields on gappy listings via the enricher.
+
+        Gated for cost: only listings missing at least ``enrich_min_gaps``
+        important fields are enriched, and at most ``enrich_max_listings`` per
+        run (the gappiest first). Each filled value is written to the Listing
+        (or its ListingSnapshot for per-stay pricing) and the full provenance —
+        value, confidence, source URL, reasoning — is stored on
+        ``Listing.enrichment``.
+        """
+        from db.models import Listing as DBListing
+        from enrichment.agent import (
+            IMPORTANT_FIELDS,
+            SNAPSHOT_FIELDS,
+            missing_important_fields,
+        )
+
+        min_gaps = config_mod.settings.enrich_min_gaps
+        max_listings = config_mod.settings.enrich_max_listings
+
+        ranked = sorted(
+            candidates,
+            key=lambda c: len(missing_important_fields(c[2])),
+            reverse=True,
+        )
+        selected = [c for c in ranked if len(missing_important_fields(c[2])) >= min_gaps][
+            :max_listings
+        ]
+
+        if not selected:
+            self._write_log(lf, "INFO", "Enrichment: no listings met the gap threshold",
+                            min_gaps=min_gaps, candidates=len(candidates))
+            return
+
+        self._write_log(lf, "INFO", "Enrichment pass starting",
+                        selected=len(selected), candidates=len(candidates))
+
+        for listing_id, snap, listing_ex, source in selected:
+            if self._cancel_flag.is_set():
+                break
+            try:
+                res = self._enricher.enrich(listing_ex, source=source)
+            except Exception as exc:  # noqa: BLE001
+                self._write_log(lf, "ERROR", "Enrichment errored",
+                                listing_id=listing_id, error=str(exc))
+                continue
+
+            stats["enrich_tokens"] += res.total_tokens
+            stats["enrich_searches"] += res.web_search_count
+            stats["enrich_cost_usd"] += res.estimated_cost_usd
+
+            db_listing = sess.get(DBListing, listing_id)
+            if db_listing is None:
+                continue
+
+            for fname, value in res.filled.items():
+                if fname in SNAPSHOT_FIELDS:
+                    if snap is not None and hasattr(snap, fname):
+                        setattr(snap, fname, value)
+                elif hasattr(db_listing, fname):
+                    setattr(db_listing, fname, value)
+
+            db_listing.enrichment = res.provenance or None
+            db_listing.enrichment_status = res.status
+            if res.filled:
+                stats["enriched_count"] += 1
+            sess.flush()
+
+            self._write_log(lf, "INFO", "Listing enriched",
+                            listing_id=listing_id, status=res.status,
+                            filled=list(res.filled.keys()),
+                            searches=res.web_search_count)
 
     # ------------------------------------------------------------------
     # Public API
@@ -532,7 +632,15 @@ class Pipeline:
                 "total_tokens": 0,
                 "estimated_cost_usd": 0.0,
                 "fallback_engaged": False,
+                "enriched_count": 0,
+                "enrich_tokens": 0,
+                "enrich_searches": 0,
+                "enrich_cost_usd": 0.0,
             }
+
+            # (listing_id, snapshot, extracted) tuples for the optional
+            # post-extraction enrichment pass.
+            enrich_candidates: list[tuple[int, Any, Any]] = []
 
             seen_hashes: set[str] = set()
 
@@ -663,7 +771,9 @@ class Pipeline:
                         continue
 
                     for listing_ex in result.listings:
-                        # Upsert the normalised Listing
+                        # Upsert the normalised Listing (static attributes,
+                        # including the expanded host/trust, location, and
+                        # policy fields).
                         listing, is_new, was_updated = self._repo.upsert_listing(
                             sess,
                             source=payload.source,
@@ -683,6 +793,26 @@ class Pipeline:
                             amenities=listing_ex.amenities,
                             images=listing_ex.images,
                             host_or_brand=listing_ex.host_or_brand,
+                            # Host & trust signals
+                            host_is_superhost=listing_ex.host_is_superhost,
+                            host_response_rate=listing_ex.host_response_rate,
+                            host_response_time=listing_ex.host_response_time,
+                            years_hosting=listing_ex.years_hosting,
+                            rating_cleanliness=listing_ex.rating_cleanliness,
+                            rating_location=listing_ex.rating_location,
+                            rating_value=listing_ex.rating_value,
+                            license_number=listing_ex.license_number,
+                            # Location precision
+                            neighborhood=listing_ex.neighborhood,
+                            distance_to_center_km=listing_ex.distance_to_center_km,
+                            # Policies & rules
+                            cancellation_policy=listing_ex.cancellation_policy,
+                            checkin_time=listing_ex.checkin_time,
+                            checkout_time=listing_ex.checkout_time,
+                            instant_book=listing_ex.instant_book,
+                            pets_allowed=listing_ex.pets_allowed,
+                            smoking_allowed=listing_ex.smoking_allowed,
+                            events_allowed=listing_ex.events_allowed,
                         )
 
                         # Insert price/availability snapshot. Fees are stored as
@@ -693,7 +823,7 @@ class Pipeline:
                             if listing_ex.fees
                             else None
                         )
-                        self._repo.insert_snapshot(
+                        snap = self._repo.insert_snapshot(
                             sess,
                             listing_id=listing.id,
                             run_id=run_id,
@@ -702,7 +832,20 @@ class Pipeline:
                             total_price=listing_ex.total_price,
                             fees=fees_dict,
                             availability=listing_ex.availability,
+                            # Pricing breakdown (per-stay)
+                            cleaning_fee=listing_ex.cleaning_fee,
+                            service_fee=listing_ex.service_fee,
+                            taxes=listing_ex.taxes,
+                            deposit=listing_ex.deposit,
+                            weekly_discount_pct=listing_ex.weekly_discount_pct,
+                            monthly_discount_pct=listing_ex.monthly_discount_pct,
+                            minimum_nights=listing_ex.minimum_nights,
                         )
+
+                        if self._enricher is not None:
+                            enrich_candidates.append(
+                                (listing.id, snap, listing_ex, payload.source)
+                            )
 
                         stats["total_listings"] += 1
                         if is_new:
@@ -733,6 +876,10 @@ class Pipeline:
                     # Token usage is per extraction call (one call per page).
                     stats["total_tokens"] += result.total_tokens
                     stats["estimated_cost_usd"] += result.estimated_cost_usd
+
+                # Optional reason-and-act enrichment pass over listings with gaps.
+                if self._enricher is not None and not cancelled and enrich_candidates:
+                    self._run_enrichment(sess, enrich_candidates, stats, lf)
 
                 # Close the run
                 final_status = "cancelled" if cancelled else "done"

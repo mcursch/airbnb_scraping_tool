@@ -117,6 +117,18 @@ def _cmd_scan(args: types.SimpleNamespace) -> None:
     help="Extraction model: opus | sonnet | haiku | fable, or a full model id "
     "(default: opus). sonnet is ~5x cheaper than opus for extraction.",
 )
+@click.option(
+    "--enrich",
+    is_flag=True,
+    default=False,
+    help="After extraction, use a web-research agent to fill missing fields on "
+    "gappy listings (costs extra LLM tokens + web searches; gated/capped).",
+)
+@click.option(
+    "--enrich-model",
+    default=None,
+    help="Model for the enrichment agent (opus | sonnet | haiku | fable or full id).",
+)
 def scan(
     area: str,
     checkin: str | None,
@@ -127,6 +139,8 @@ def scan(
     batch: bool,
     dry_run: bool,
     model: str | None,
+    enrich: bool,
+    enrich_model: str | None,
 ) -> None:
     """Run a full market scan for AREA.
 
@@ -173,7 +187,12 @@ def scan(
         return
 
     # --- normal: full acquire -> extract -> store -------------------------
-    result = run_search(query, model=resolved_model)
+    result = run_search(
+        query,
+        model=resolved_model,
+        enrich=enrich,
+        enrich_model=_resolve_model(enrich_model),
+    )
     if result.status == "done":
         click.echo(f"Scan complete: run {result.run_id}")
     else:

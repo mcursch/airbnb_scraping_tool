@@ -551,6 +551,13 @@ class Repo:
         total_price: float | None = None,
         fees: dict[str, Any] | None = None,
         availability: bool | str | None = None,
+        cleaning_fee: float | None = None,
+        service_fee: float | None = None,
+        taxes: float | None = None,
+        deposit: float | None = None,
+        weekly_discount_pct: float | None = None,
+        monthly_discount_pct: float | None = None,
+        minimum_nights: int | None = None,
     ) -> ListingSnapshot:
         snap = ListingSnapshot(
             listing_id=listing_id,
@@ -560,6 +567,13 @@ class Repo:
             total_price=total_price,
             fees=fees,
             availability=availability,
+            cleaning_fee=cleaning_fee,
+            service_fee=service_fee,
+            taxes=taxes,
+            deposit=deposit,
+            weekly_discount_pct=weekly_discount_pct,
+            monthly_discount_pct=monthly_discount_pct,
+            minimum_nights=minimum_nights,
         )
         session.add(snap)
         session.flush()

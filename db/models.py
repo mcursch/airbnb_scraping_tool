@@ -74,6 +74,36 @@ class Listing(Base):
     images = Column(JSON)
     url = Column(String)
     host_or_brand = Column(String)
+
+    # ── Host & trust signals ────────────────────────────────────────────────
+    host_is_superhost = Column(Integer)  # 0/1/NULL (SQLite has no native bool)
+    host_response_rate = Column(Integer)
+    host_response_time = Column(String)
+    years_hosting = Column(Integer)
+    rating_cleanliness = Column(Float)
+    rating_location = Column(Float)
+    rating_value = Column(Float)
+    license_number = Column(String)
+
+    # ── Location precision ──────────────────────────────────────────────────
+    neighborhood = Column(String)
+    distance_to_center_km = Column(Float)
+
+    # ── Policies & rules ────────────────────────────────────────────────────
+    cancellation_policy = Column(String)
+    checkin_time = Column(String)
+    checkout_time = Column(String)
+    instant_book = Column(Integer)  # 0/1/NULL
+    pets_allowed = Column(Integer)
+    smoking_allowed = Column(Integer)
+    events_allowed = Column(Integer)
+
+    # ── Enrichment provenance ───────────────────────────────────────────────
+    # JSON map: {field_name: {"value": ..., "confidence": 0-1, "source_url": ...,
+    # "reasoning": ...}} written by the reason-and-act enrichment agent.
+    enrichment = Column(JSON)
+    enrichment_status = Column(String)  # None | "enriched" | "no_gaps" | "failed"
+
     first_seen_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     last_seen_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
@@ -120,6 +150,16 @@ class ListingSnapshot(Base):
     total_price = Column(Float)
     fees = Column(JSON)
     availability = Column(String)
+
+    # ── Pricing breakdown (per-stay; complements the freeform `fees` JSON) ────
+    cleaning_fee = Column(Float)
+    service_fee = Column(Float)
+    taxes = Column(Float)
+    deposit = Column(Float)
+    weekly_discount_pct = Column(Float)
+    monthly_discount_pct = Column(Float)
+    minimum_nights = Column(Integer)
+
     captured_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     listing = relationship("Listing", back_populates="snapshots")
@@ -207,6 +247,35 @@ def _set_sqlite_pragmas(dbapi_conn, _record):  # noqa: ANN001
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
 
+def _ensure_columns(eng) -> None:  # noqa: ANN001
+    """Add any model columns missing from existing tables (lightweight SQLite migration).
+
+    ``Base.metadata.create_all`` creates missing *tables* but never ALTERs an
+    existing one, so new columns added to a model would be invisible on a DB
+    created by an older version. This walks each mapped table and issues
+    ``ALTER TABLE ... ADD COLUMN`` for every column the live schema is missing.
+    SQLite's ``ADD COLUMN`` is cheap and non-destructive (new column is NULL).
+    """
+    from sqlalchemy import inspect, text
+
+    inspector = inspect(eng)
+    existing_tables = set(inspector.get_table_names())
+
+    with eng.begin() as conn:
+        for table in Base.metadata.sorted_tables:
+            if table.name not in existing_tables:
+                continue  # create_all already made it with all columns
+            have = {col["name"] for col in inspector.get_columns(table.name)}
+            for column in table.columns:
+                if column.name in have:
+                    continue
+                col_type = column.type.compile(dialect=eng.dialect)
+                conn.execute(
+                    text(f'ALTER TABLE "{table.name}" ADD COLUMN "{column.name}" {col_type}')
+                )
+
+
 def init_db() -> None:
-    """Create all tables if they do not already exist."""
+    """Create all tables if they do not already exist, then add any new columns."""
     Base.metadata.create_all(engine)
+    _ensure_columns(engine)

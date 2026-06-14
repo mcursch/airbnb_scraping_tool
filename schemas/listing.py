@@ -61,6 +61,74 @@ class ExtractedListing(BaseModel):
         None, description="True if available for the requested dates"
     )
 
+    # ── Host & trust signals ────────────────────────────────────────────────
+    host_is_superhost: bool | None = Field(
+        None, description="True if the host is an Airbnb Superhost (or equivalent badge)"
+    )
+    host_response_rate: int | None = Field(
+        None, description="Host response rate as a percentage 0–100"
+    )
+    host_response_time: str | None = Field(
+        None, description="Host response time, e.g. 'within an hour', 'within a day'"
+    )
+    years_hosting: int | None = Field(
+        None, description="How many years the host has been hosting"
+    )
+    rating_cleanliness: float | None = Field(
+        None, description="Cleanliness sub-rating on a 0–5 scale"
+    )
+    rating_location: float | None = Field(
+        None, description="Location sub-rating on a 0–5 scale"
+    )
+    rating_value: float | None = Field(
+        None, description="Value-for-money sub-rating on a 0–5 scale"
+    )
+    license_number: str | None = Field(
+        None, description="Rental licence / registration number where shown"
+    )
+
+    # ── Pricing breakdown (per-stay; complements the `fees` list) ────────────
+    cleaning_fee: float | None = Field(None, description="Cleaning fee amount")
+    service_fee: float | None = Field(None, description="Service fee amount")
+    taxes: float | None = Field(None, description="Taxes / occupancy fees amount")
+    deposit: float | None = Field(None, description="Security/damage deposit amount")
+    weekly_discount_pct: float | None = Field(
+        None, description="Weekly-stay discount as a percentage 0–100"
+    )
+    monthly_discount_pct: float | None = Field(
+        None, description="Monthly-stay discount as a percentage 0–100"
+    )
+    minimum_nights: int | None = Field(
+        None, description="Minimum number of nights required to book"
+    )
+
+    # ── Location precision ──────────────────────────────────────────────────
+    neighborhood: str | None = Field(
+        None, description="Neighbourhood / district name within the city"
+    )
+    distance_to_center_km: float | None = Field(
+        None, description="Distance to the city centre in kilometres"
+    )
+
+    # ── Policies & rules ────────────────────────────────────────────────────
+    cancellation_policy: str | None = Field(
+        None, description="Cancellation policy, e.g. 'Flexible', 'Moderate', 'Strict'"
+    )
+    checkin_time: str | None = Field(
+        None, description="Check-in time or window, e.g. '15:00' or 'After 3:00 PM'"
+    )
+    checkout_time: str | None = Field(
+        None, description="Check-out time, e.g. '11:00' or 'Before 11:00 AM'"
+    )
+    instant_book: bool | None = Field(
+        None, description="True if the listing can be booked instantly (no host approval)"
+    )
+    pets_allowed: bool | None = Field(None, description="True if pets are allowed")
+    smoking_allowed: bool | None = Field(None, description="True if smoking is allowed")
+    events_allowed: bool | None = Field(
+        None, description="True if parties/events are allowed"
+    )
+
 
 class ListingExtraction(BaseModel):
     """Top-level response schema returned by Claude for a single scraped page."""
