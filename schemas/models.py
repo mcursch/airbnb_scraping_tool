@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Any, Literal, Optional
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, model_validator
 
 
 # ---------------------------------------------------------------------------
@@ -160,43 +160,3 @@ class ExtractionLog(BaseModel):
     cache_read_tokens: int = Field(0, ge=0, description="Tokens served from the prompt cache")
     status: ExtractionStatus = Field(..., description="'success' or 'failed'")
     error: Optional[str] = Field(None, description="Error detail when status='failed'")
-
-
-# ---------------------------------------------------------------------------
-# ListingExtraction — structured-output target for the LLM extraction stage
-# ---------------------------------------------------------------------------
-
-
-class ListingExtraction(BaseModel):
-    """The Pydantic schema passed to client.messages.parse() as the output format.
-
-    Fields are intentionally lenient (all Optional except source_listing_id) so
-    the model can emit partial extractions that still validate.
-    """
-
-    source_listing_id: str = Field(..., min_length=1, description="Listing ID from the source platform")
-    name: Optional[str] = Field(None, description="Listing title")
-    property_type: Optional[str] = Field(None, description="Property category")
-    lat: Optional[float] = Field(None, ge=-90.0, le=90.0)
-    lon: Optional[float] = Field(None, ge=-180.0, le=180.0)
-    address_text: Optional[str] = Field(None)
-    bedrooms: Optional[int] = Field(None, ge=0)
-    beds: Optional[int] = Field(None, ge=0)
-    baths: Optional[float] = Field(None, ge=0.0)
-    max_guests: Optional[int] = Field(None, ge=1)
-    rating: Optional[float] = Field(None, ge=0.0, le=5.0)
-    review_count: Optional[int] = Field(None, ge=0)
-    amenities: list[str] = Field(default_factory=list)
-    images: list[str] = Field(default_factory=list)
-    url: Optional[str] = Field(None)
-    host_or_brand: Optional[str] = Field(None)
-    nightly_price: Optional[float] = Field(None, ge=0.0)
-    currency: Optional[str] = Field(None, min_length=3, max_length=3)
-    total_price: Optional[float] = Field(None, ge=0.0)
-    fees: dict[str, Any] = Field(default_factory=dict)
-    availability: Optional[bool] = Field(None)
-
-    @field_validator("currency")
-    @classmethod
-    def currency_uppercase(cls, v: Optional[str]) -> Optional[str]:
-        return v.upper() if v is not None else v

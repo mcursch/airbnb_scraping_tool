@@ -14,7 +14,6 @@ from pydantic import ValidationError
 from schemas import (
     ExtractionLog,
     Listing,
-    ListingExtraction,
     ListingSnapshot,
     RawPayload,
     SearchQuery,
@@ -374,74 +373,3 @@ class TestExtractionLog:
         log = ExtractionLog(**self._valid_kwargs())
         restored = ExtractionLog.model_validate_json(log.model_dump_json())
         assert restored == log
-
-
-# ===========================================================================
-# ListingExtraction
-# ===========================================================================
-
-
-class TestListingExtraction:
-    def _valid_kwargs(self):
-        return dict(
-            source_listing_id="98765",
-            name="Modern loft",
-            property_type="Entire loft",
-            lat=48.858,
-            lon=2.294,
-            bedrooms=2,
-            beds=3,
-            baths=1.5,
-            max_guests=4,
-            rating=4.6,
-            review_count=88,
-            amenities=["WiFi", "Dishwasher"],
-            images=["https://a0.muscache.com/img1.jpg"],
-            url="https://www.airbnb.com/rooms/98765",
-            host_or_brand="Marie",
-            nightly_price=110.0,
-            currency="EUR",
-            total_price=550.0,
-            fees={"cleaning_fee": 50.0},
-            availability=True,
-        )
-
-    def test_valid(self):
-        ex = ListingExtraction(**self._valid_kwargs())
-        assert ex.source_listing_id == "98765"
-        assert ex.currency == "EUR"
-
-    def test_currency_normalised_to_uppercase(self):
-        kwargs = self._valid_kwargs()
-        kwargs["currency"] = "eur"
-        ex = ListingExtraction(**kwargs)
-        assert ex.currency == "EUR"
-
-    def test_invalid_rating_too_high(self):
-        kwargs = self._valid_kwargs()
-        kwargs["rating"] = 5.5
-        with pytest.raises(ValidationError):
-            ListingExtraction(**kwargs)
-
-    def test_invalid_nightly_price_string(self):
-        kwargs = self._valid_kwargs()
-        kwargs["nightly_price"] = "hundred"  # type: ignore[arg-type]
-        with pytest.raises(ValidationError):
-            ListingExtraction(**kwargs)
-
-    def test_invalid_lat_out_of_range(self):
-        kwargs = self._valid_kwargs()
-        kwargs["lat"] = -91.0
-        with pytest.raises(ValidationError):
-            ListingExtraction(**kwargs)
-
-    def test_minimal_only_required(self):
-        ex = ListingExtraction(source_listing_id="abc")
-        assert ex.name is None
-        assert ex.amenities == []
-        assert ex.fees == {}
-
-    def test_round_trip_json(self):
-        ex = ListingExtraction(**self._valid_kwargs())
-        restored = ListingExtraction.model_validate_json(ex.model_dump_json())
-        assert restored == ex

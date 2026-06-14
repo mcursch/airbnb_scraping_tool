@@ -1,8 +1,7 @@
-from schemas.listing import ExtractedListing
+from schemas.listing import ExtractedListing, ListingExtraction
 from schemas.models import (
     ExtractionLog,
     Listing,
-    ListingExtraction,
     ListingSnapshot,
     RawPayload,
     SearchQuery,
