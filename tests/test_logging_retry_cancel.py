@@ -116,7 +116,7 @@ class TestRunLogging:
         SF = sessionmaker(bind=eng, autoflush=False, autocommit=False)
 
         raw = _make_raw_payload("log-test-1", idx=1)
-        result = ExtractionResult(listing=_make_listing_extraction(1), status="ok")
+        result = ExtractionResult(listings=[_make_listing_extraction(1)], status="ok")
         extractor = _FakeExtractor([result])
         pipeline = Pipeline(
             scrapers=[_FakeScraper([raw])],
@@ -145,7 +145,7 @@ class TestRunLogging:
         SF = sessionmaker(bind=eng, autoflush=False, autocommit=False)
 
         raw = _make_raw_payload("log-test-2", idx=2)
-        result = ExtractionResult(listing=_make_listing_extraction(2), status="ok")
+        result = ExtractionResult(listings=[_make_listing_extraction(2)], status="ok")
         extractor = _FakeExtractor([result])
         pipeline = Pipeline(
             scrapers=[_FakeScraper([raw])],
@@ -223,7 +223,7 @@ class TestSigintCancellation:
         # prevents processing of the remaining records.
         payloads = [_make_raw_payload(f"sigint-payload-{i}", idx=i) for i in range(3)]
         results = [
-            ExtractionResult(listing=_make_listing_extraction(i), status="ok")
+            ExtractionResult(listings=[_make_listing_extraction(i)], status="ok")
             for i in range(3)
         ]
         extractor = _FakeExtractor(results, delay=0.15)

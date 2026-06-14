@@ -75,12 +75,15 @@ The live Airbnb network test is skipped unless `AIRBNB_LIVE_TEST=1` is set.
 
 ## Known limitations / remaining cleanup
 
-- `SearchQuery` is still defined in three places (`schemas/models.py`,
-  `schemas/search_query.py`, `scrapers/base.py`) with slightly different fields.
-  They interoperate by duck-typing; collapsing them to one is a follow-up.
-- The interactive pipeline (`run_search` / dashboard) maps one scraped payload
-  to one listing. For search-results pages with many listings, use the bulk
-  `extraction.extractor.extract_listings` / Batches path. Unifying these two
-  extraction models is a follow-up.
+- There are still two `ListingExtraction` schemas: `schemas/listing.py`
+  (the page wrapper `{listings: [...]}`, used by both extraction paths) and a
+  legacy single-listing `schemas/models.py:ListingExtraction` (now unused by the
+  pipeline; kept only via `schemas/__init__`). Removing the legacy one is a
+  minor follow-up.
 - Scrapers target live sites and will need maintenance when Airbnb/Booking
   change their markup or endpoints.
+
+Resolved recently: the four duplicate `SearchQuery` definitions were collapsed
+into one (`schemas/models.py`), and the interactive pipeline now extracts
+*all* listings from a scraped page (page→many), matching the bulk
+`extract_listings` / Batches path and sharing the same wrapper schema.

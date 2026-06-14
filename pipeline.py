@@ -560,69 +560,71 @@ class Pipeline:
                     if no_extract:
                         continue
 
-                    # LLM extraction
+                    # LLM extraction — one API call per scraped page can yield
+                    # many listings (search-results pages); upsert each.
                     result = self._extractor.extract(payload.source, payload.url, payload.payload)
 
-                    if result.listing is None:
+                    if result.status != "ok" or not result.listings:
                         self._write_log(
-                            lf, "WARNING", "Extraction failed",
+                            lf, "WARNING", "Extraction failed or empty",
                             url=payload.url, error=result.error,
                         )
                         continue
 
-                    listing_ex = result.listing
+                    for listing_ex in result.listings:
+                        # Upsert the normalised Listing
+                        listing, is_new, was_updated = self._repo.upsert_listing(
+                            sess,
+                            source=payload.source,
+                            source_listing_id=listing_ex.source_listing_id,
+                            name=listing_ex.name,
+                            url=listing_ex.url,
+                            property_type=listing_ex.property_type,
+                            lat=listing_ex.lat,
+                            lon=listing_ex.lon,
+                            address_text=listing_ex.address_text,
+                            bedrooms=listing_ex.bedrooms,
+                            beds=listing_ex.beds,
+                            baths=listing_ex.baths,
+                            max_guests=listing_ex.max_guests,
+                            rating=listing_ex.rating,
+                            review_count=listing_ex.review_count,
+                            amenities=listing_ex.amenities,
+                            images=listing_ex.images,
+                            host_or_brand=listing_ex.host_or_brand,
+                        )
 
-                    # Upsert the normalised Listing
-                    listing, is_new, was_updated = self._repo.upsert_listing(
-                        sess,
-                        source=payload.source,
-                        source_listing_id=listing_ex.source_listing_id,
-                        name=listing_ex.name,
-                        url=listing_ex.url,
-                        property_type=listing_ex.property_type,
-                        lat=listing_ex.lat,
-                        lon=listing_ex.lon,
-                        address_text=listing_ex.address_text,
-                        bedrooms=listing_ex.bedrooms,
-                        beds=listing_ex.beds,
-                        baths=listing_ex.baths,
-                        max_guests=listing_ex.max_guests,
-                        rating=listing_ex.rating,
-                        review_count=listing_ex.review_count,
-                        amenities=listing_ex.amenities,
-                        images=listing_ex.images,
-                        host_or_brand=listing_ex.host_or_brand,
-                    )
+                        # Insert price/availability snapshot
+                        self._repo.insert_snapshot(
+                            sess,
+                            listing_id=listing.id,
+                            run_id=run_id,
+                            nightly_price=listing_ex.nightly_price,
+                            currency=listing_ex.currency,
+                            total_price=listing_ex.total_price,
+                            fees=listing_ex.fees if listing_ex.fees else None,
+                            availability=listing_ex.availability,
+                        )
 
-                    # Insert price/availability snapshot
-                    self._repo.insert_snapshot(
-                        sess,
-                        listing_id=listing.id,
-                        run_id=run_id,
-                        nightly_price=listing_ex.nightly_price,
-                        currency=listing_ex.currency,
-                        total_price=listing_ex.total_price,
-                        fees=listing_ex.fees if listing_ex.fees else None,
-                        availability=listing_ex.availability,
-                    )
+                        stats["total_listings"] += 1
+                        if is_new:
+                            stats["new"] += 1
+                        elif was_updated:
+                            stats["updated"] += 1
+
+                        self._write_log(
+                            lf, "INFO", "Listing extracted",
+                            url=payload.url,
+                            source_listing_id=listing_ex.source_listing_id,
+                            is_new=is_new, was_updated=was_updated,
+                        )
 
                     raw_scrape.status = "extracted"
                     sess.flush()
 
-                    # Accumulate stats
-                    tokens = result.total_tokens
-                    stats["total_tokens"] += tokens
+                    # Token usage is per extraction call (one call per page).
+                    stats["total_tokens"] += result.total_tokens
                     stats["estimated_cost_usd"] += result.estimated_cost_usd
-                    stats["total_listings"] += 1
-                    if is_new:
-                        stats["new"] += 1
-                    elif was_updated:
-                        stats["updated"] += 1
-
-                    self._write_log(
-                        lf, "INFO", "Listing extracted",
-                        url=payload.url, is_new=is_new, was_updated=was_updated, tokens=tokens,
-                    )
 
                 # Close the run
                 final_status = "cancelled" if cancelled else "done"

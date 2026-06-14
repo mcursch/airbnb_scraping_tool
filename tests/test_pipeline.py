@@ -146,7 +146,7 @@ class TestPipelineScanProducesClosedRun:
 
         raw = _make_raw_payload("unique-content-1")
         extraction = ExtractionResult(
-            listing=_make_listing_extraction(),
+            listings=[_make_listing_extraction()],
             input_tokens=100,
             output_tokens=50,
             cache_read_tokens=0,
@@ -173,7 +173,7 @@ class TestPipelineScanProducesClosedRun:
 
         raw = _make_raw_payload("unique-content-2")
         extraction = ExtractionResult(
-            listing=_make_listing_extraction(),
+            listings=[_make_listing_extraction()],
             input_tokens=200,
             output_tokens=80,
             cache_read_tokens=10,
@@ -201,7 +201,7 @@ class TestPipelineScanProducesClosedRun:
 
         raw = _make_raw_payload("unique-content-3")
         extraction = ExtractionResult(
-            listing=_make_listing_extraction(),
+            listings=[_make_listing_extraction()],
             input_tokens=100,
             output_tokens=50,
             cache_read_tokens=20,
@@ -236,7 +236,7 @@ class TestPipelineScanProducesClosedRun:
         raw2 = _make_raw_payload(payload_text)  # identical hash
 
         extraction = ExtractionResult(
-            listing=_make_listing_extraction(),
+            listings=[_make_listing_extraction()],
             input_tokens=100,
             output_tokens=50,
             cache_read_tokens=0,
@@ -266,7 +266,7 @@ class TestPipelineScanProducesClosedRun:
         # First run — new listing
         raw1 = _make_raw_payload("run1-content")
         ext1 = ExtractionResult(
-            listing=_make_listing_extraction(source_listing_id="L1", name="Original Name"),
+            listings=[_make_listing_extraction(source_listing_id="L1", name="Original Name")],
             input_tokens=50,
             output_tokens=20,
             status="ok",
@@ -281,7 +281,7 @@ class TestPipelineScanProducesClosedRun:
         # Second run — same listing id but name changed, different hash
         raw2 = _make_raw_payload("run2-different-content")
         ext2 = ExtractionResult(
-            listing=_make_listing_extraction(source_listing_id="L1", name="Updated Name"),
+            listings=[_make_listing_extraction(source_listing_id="L1", name="Updated Name")],
             input_tokens=50,
             output_tokens=20,
             status="ok",
@@ -301,6 +301,45 @@ class TestPipelineScanProducesClosedRun:
         assert run1.stats["updated"] == 0
         assert run2.stats["new"] == 0
         assert run2.stats["updated"] == 1
+
+    def test_many_listings_from_one_page(self):
+        """One scraped page can yield many listings — each is stored with a snapshot."""
+        eng = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
+        Base.metadata.create_all(eng)
+        Session = sessionmaker(bind=eng, autoflush=False, autocommit=False)
+
+        raw = _make_raw_payload("search-results-page")
+        extraction = ExtractionResult(
+            listings=[
+                _make_listing_extraction(source_listing_id="A", name="Listing A"),
+                _make_listing_extraction(source_listing_id="B", name="Listing B"),
+                _make_listing_extraction(source_listing_id="C", name="Listing C"),
+            ],
+            input_tokens=300,
+            output_tokens=120,
+            cache_read_tokens=0,
+            status="ok",
+        )
+
+        run_id = _run_pipeline_with_session(
+            eng,
+            query=SearchQuery(area="Lisbon", sources=["airbnb"]),
+            scrapers=[FakeScraper([raw])],
+            extractor=FakeExtractor([extraction]),
+        )
+
+        with Session() as sess:
+            run = sess.get(SearchRun, run_id)
+            listings = sess.scalars(select(Listing)).all()
+            snaps = sess.scalars(
+                select(ListingSnapshot).where(ListingSnapshot.run_id == run_id)
+            ).all()
+
+        assert run.stats["total_listings"] == 3
+        assert run.stats["new"] == 3
+        assert run.stats["total_tokens"] == 420  # one call: 300 + 120 + 0
+        assert len(listings) == 3
+        assert len(snaps) == 3
 
 
 # ---------------------------------------------------------------------------
