@@ -26,11 +26,22 @@ import urllib.parse
 from typing import TYPE_CHECKING, Any
 
 try:
-    from playwright.async_api import Response, async_playwright
-    from playwright_stealth import Stealth
+    from playwright.async_api import (
+        Response,
+        TimeoutError as PlaywrightTimeoutError,
+        async_playwright,
+    )
     _PLAYWRIGHT_AVAILABLE = True
 except ImportError:
     _PLAYWRIGHT_AVAILABLE = False
+
+# Stealth is an optional enhancement — the browser still runs without it (just
+# at higher bot-detection risk). Do NOT couple its availability to playwright's.
+try:
+    from playwright_stealth import Stealth
+    _STEALTH_AVAILABLE = True
+except ImportError:
+    _STEALTH_AVAILABLE = False
 
 try:
     from playwright.sync_api import sync_playwright as _sync_playwright
@@ -370,17 +381,34 @@ class AirbnbScraper(ScrapeProvider):
             )
             page = await context.new_page()
 
-            # Apply stealth patches before any navigation.
-            await Stealth().apply_stealth_async(page)  # type: ignore[name-defined]
+            # Apply stealth patches before any navigation (optional).
+            if _STEALTH_AVAILABLE:
+                await Stealth().apply_stealth_async(page)  # type: ignore[name-defined]
+            else:
+                log.warning(
+                    "playwright-stealth not installed; running without stealth "
+                    "patches (higher bot-detection risk). `pip install playwright-stealth`."
+                )
 
             page.on("response", _on_response)
 
             search_url = build_search_url(query)
-            await page.goto(
-                search_url,
-                wait_until="networkidle",
-                timeout=self.page_timeout_ms,
-            )
+            # "networkidle" is unreliable on Airbnb's SPA (it keeps long-lived
+            # connections open, so the event often never fires). Wait for the
+            # DOM instead, and if even that times out, still harvest whatever
+            # API responses were captured during the attempt rather than failing
+            # the whole scrape.
+            try:
+                await page.goto(
+                    search_url,
+                    wait_until="domcontentloaded",
+                    timeout=self.page_timeout_ms,
+                )
+            except PlaywrightTimeoutError:  # type: ignore[name-defined]
+                log.warning(
+                    "Airbnb navigation timed out (%dms); harvesting any captured "
+                    "responses.", self.page_timeout_ms,
+                )
 
             # Polite pause — lets any final XHRs land before we read bodies.
             await asyncio.sleep(

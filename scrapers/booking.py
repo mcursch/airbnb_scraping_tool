@@ -58,6 +58,8 @@ CAPTCHA_PATTERNS: tuple[str, ...] = (
     "distil_identify_cookie",
     "cf-challenge",         # Cloudflare
     "cf_chl_",
+    "awswaf",               # AWS WAF challenge (token.awswaf.com / awsWafCookieDomainList)
+    "reportchallengeerror",  # AWS WAF challenge script
     "captcha",              # generic CAPTCHA
     "are you a human",
     "unusual traffic",
