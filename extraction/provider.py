@@ -11,6 +11,8 @@ returns an :class:`ExtractionResult` for the caller (``Pipeline``) to persist.
 
 from __future__ import annotations
 
+import json
+import re
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -20,12 +22,33 @@ from schemas.listing import ExtractedListing, ListingExtraction
 
 MODEL = "claude-opus-4-8"
 
-SYSTEM_PROMPT = """\
-You are a structured data extraction assistant for a short-stay accommodation scanner.
-Given raw scraped content from a listing page, extract the listing details into the
-provided JSON schema.  Be precise; use null for any field you cannot determine.
-Extract only what is present in the content — do not invent values.
-"""
+# The listing schema is too rich for grammar-constrained structured outputs
+# (`messages.parse(output_format=...)` returns 400 "Schema is too complex" /
+# "Grammar compilation timed out" beyond ~10 fields). We use JSON mode instead:
+# ask for a JSON object conforming to the schema, then validate with Pydantic.
+_SCHEMA_JSON = json.dumps(ListingExtraction.model_json_schema(), separators=(",", ":"))
+
+SYSTEM_PROMPT = (
+    "You are a structured data extraction assistant for a short-stay accommodation "
+    "scanner. Extract every distinct listing from the scraped content.\n"
+    "Return ONLY a single JSON object (no prose, no markdown, no code fences) that "
+    "conforms to this JSON Schema:\n" + _SCHEMA_JSON + "\n"
+    "Use null for any field you cannot determine. Extract only what is present in the "
+    "content — do not invent values."
+)
+
+
+def _extract_json(text: str) -> str:
+    """Best-effort isolation of the JSON object from a model response."""
+    text = text.strip()
+    # Strip ```json ... ``` fences if present.
+    text = re.sub(r"^```(?:json)?\s*|\s*```$", "", text, flags=re.MULTILINE).strip()
+    # Fall back to the outermost braces.
+    if not text.startswith("{"):
+        start, end = text.find("{"), text.rfind("}")
+        if start != -1 and end != -1 and end > start:
+            text = text[start : end + 1]
+    return text
 
 
 @dataclass
@@ -90,9 +113,9 @@ class Extractor:
         trimmed = pretrim(payload)
 
         try:
-            response = self._client.messages.parse(
+            response = self._client.messages.create(
                 model=self._model,
-                max_tokens=4096,
+                max_tokens=8192,
                 system=[
                     {
                         "type": "text",
@@ -106,17 +129,32 @@ class Extractor:
                         "content": f"Source: {source}\nURL: {url}\n\nRaw content:\n{trimmed}",
                     }
                 ],
-                output_format=ListingExtraction,
             )
         except Exception as exc:  # noqa: BLE001
             return ExtractionResult(listings=[], status="failed", error=str(exc))
 
         usage = response.usage
-        parsed: ListingExtraction = response.parsed
+        in_tok = getattr(usage, "input_tokens", 0) if usage else 0
+        out_tok = getattr(usage, "output_tokens", 0) if usage else 0
+        cache_tok = getattr(usage, "cache_read_input_tokens", 0) if usage else 0
+
+        text = "".join(b.text for b in response.content if b.type == "text")
+        try:
+            parsed = ListingExtraction.model_validate_json(_extract_json(text))
+        except Exception as exc:  # noqa: BLE001
+            return ExtractionResult(
+                listings=[],
+                input_tokens=in_tok,
+                output_tokens=out_tok,
+                cache_read_tokens=cache_tok,
+                status="failed",
+                error=f"JSON validation failed: {exc}",
+            )
+
         return ExtractionResult(
             listings=list(parsed.listings),
-            input_tokens=getattr(usage, "input_tokens", 0) if usage else 0,
-            output_tokens=getattr(usage, "output_tokens", 0) if usage else 0,
-            cache_read_tokens=getattr(usage, "cache_read_input_tokens", 0) if usage else 0,
+            input_tokens=in_tok,
+            output_tokens=out_tok,
+            cache_read_tokens=cache_tok,
             status="ok",
         )

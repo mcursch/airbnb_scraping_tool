@@ -7,9 +7,17 @@ from raw scraped content.
 """
 from __future__ import annotations
 
-from typing import Any
-
 from pydantic import BaseModel, Field
+
+
+class FeeItem(BaseModel):
+    """A single itemised fee. A closed schema (no open-ended dict) so the
+    structured-output grammar compiles — `dict[str, Any]` triggers
+    'Schema is too complex' / 'Grammar compilation timed out' from the API."""
+
+    name: str = Field(..., description="Fee name, e.g. 'cleaning fee', 'service fee'")
+    amount: float | None = Field(None, description="Fee amount")
+    currency: str | None = Field(None, description="ISO 4217 currency code")
 
 
 class ExtractedListing(BaseModel):
@@ -46,8 +54,8 @@ class ExtractedListing(BaseModel):
     nightly_price: float | None = Field(None, description="Nightly price before fees")
     currency: str | None = Field(None, description="ISO 4217 currency code, e.g. USD")
     total_price: float | None = Field(None, description="Total price for the requested stay")
-    fees: dict[str, Any] = Field(
-        default_factory=dict, description="Itemised fees (cleaning, service, etc.)"
+    fees: list[FeeItem] = Field(
+        default_factory=list, description="Itemised fees (cleaning, service, etc.)"
     )
     availability: bool | None = Field(
         None, description="True if available for the requested dates"

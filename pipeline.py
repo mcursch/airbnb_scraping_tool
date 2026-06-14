@@ -594,7 +594,14 @@ class Pipeline:
                             host_or_brand=listing_ex.host_or_brand,
                         )
 
-                        # Insert price/availability snapshot
+                        # Insert price/availability snapshot. Fees are stored as
+                        # a {name: amount} dict (the storage/dashboard contract);
+                        # the LLM emits a closed list of FeeItem for grammar safety.
+                        fees_dict = (
+                            {f.name: f.amount for f in listing_ex.fees}
+                            if listing_ex.fees
+                            else None
+                        )
                         self._repo.insert_snapshot(
                             sess,
                             listing_id=listing.id,
@@ -602,7 +609,7 @@ class Pipeline:
                             nightly_price=listing_ex.nightly_price,
                             currency=listing_ex.currency,
                             total_price=listing_ex.total_price,
-                            fees=listing_ex.fees if listing_ex.fees else None,
+                            fees=fees_dict,
                             availability=listing_ex.availability,
                         )
 
