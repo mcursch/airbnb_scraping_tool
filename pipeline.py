@@ -133,9 +133,23 @@ def run_search(
     except Exception as exc:  # noqa: BLE001
         return PipelineResult(status="failed", error=f"Failed to build extractor: {exc}")
 
+    # Build the paid-scraping fallback when an API key is configured. It
+    # auto-engages inside Pipeline.run whenever a primary scraper is blocked or
+    # returns nothing (the FALLBACK_PROVIDER setting — scraperapi | apify |
+    # brightdata — selects the backend; default Bright Data zone via BRIGHTDATA_ZONE).
+    fallback: Any | None = None
+    if config_mod.settings.SCRAPER_API_KEY:
+        try:
+            from scrapers.fallback_api import FallbackApiProvider
+
+            fallback = FallbackApiProvider()
+            _progress(0.13, "Paid fallback ready (auto-engages if blocked)…")
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Fallback provider unavailable (%s); continuing without it.", exc)
+
     _progress(0.15, "Starting pipeline…")
 
-    pipeline = Pipeline(scrapers=scrapers, extractor=extractor)
+    pipeline = Pipeline(scrapers=scrapers, extractor=extractor, fallback=fallback)
 
     try:
         run_id = pipeline.run(query)
@@ -388,11 +402,13 @@ class Pipeline:
         extractor: Any,
         repo: Repo | None = None,
         session_factory: Any | None = None,
+        fallback: Any | None = None,
     ) -> None:
         self._scrapers = scrapers
         self._extractor = extractor
         self._repo = repo if repo is not None else Repo()
         self._session_factory = session_factory
+        self._fallback = fallback
         self._cancel_flag = threading.Event()
 
     # ------------------------------------------------------------------
@@ -515,6 +531,7 @@ class Pipeline:
                 "dedup_hits": 0,
                 "total_tokens": 0,
                 "estimated_cost_usd": 0.0,
+                "fallback_engaged": False,
             }
 
             seen_hashes: set[str] = set()
@@ -522,13 +539,69 @@ class Pipeline:
             with open(log_path, "w", encoding="utf-8") as lf:
                 self._write_log(lf, "INFO", "Run started", run_id=run_id, area=query.area)
 
-                # Collect payloads from all scrapers
+                # Collect payloads from all scrapers. A primary scraper can fail
+                # two ways: an explicit BlockedError, or — the common Airbnb
+                # symptom from a datacenter IP — a silent empty result. Either
+                # way, engage the configured paid fallback (e.g. Bright Data Web
+                # Unlocker) once so the run still yields data. The fallback is
+                # only attempted when one is configured (SCRAPER_API_KEY set).
                 all_payloads: list[RawPayload] = []
+                fallback_attempted = False
                 for scraper in self._scrapers:
+                    scraper_name = type(scraper).__name__
+                    blocked_reason: str | None = None
+                    payloads: list[RawPayload] = []
                     try:
-                        all_payloads.extend(scraper.search(query))
+                        payloads = list(scraper.search(query))
+                    except BlockedError as exc:
+                        blocked_reason = exc.reason
+                        self._write_log(
+                            lf, "WARNING", "Scraper blocked",
+                            scraper=scraper_name, reason=exc.reason,
+                        )
                     except Exception as exc:
-                        self._write_log(lf, "ERROR", "Scraper failed", scraper=type(scraper).__name__, error=str(exc))
+                        # An unexpected (non-block) failure — record and move on;
+                        # we can't tell whether the fallback would fare better.
+                        self._write_log(
+                            lf, "ERROR", "Scraper failed",
+                            scraper=scraper_name, error=str(exc),
+                        )
+                        continue
+
+                    if payloads:
+                        all_payloads.extend(payloads)
+                        continue
+
+                    # No payloads — blocked or empty. Try the fallback once.
+                    if self._fallback is None or fallback_attempted:
+                        if blocked_reason is None:
+                            self._write_log(
+                                lf, "WARNING", "Scraper returned no payloads; "
+                                "no fallback available",
+                                scraper=scraper_name,
+                            )
+                        continue
+
+                    fallback_attempted = True
+                    reason = blocked_reason or "no payloads returned"
+                    fb_name = type(self._fallback).__name__
+                    self._write_log(
+                        lf, "INFO", "Engaging paid fallback provider",
+                        blocked_scraper=scraper_name, reason=reason, fallback=fb_name,
+                    )
+                    try:
+                        fb_payloads = list(self._fallback.search(query))
+                        stats["fallback_engaged"] = True
+                        all_payloads.extend(fb_payloads)
+                        self._write_log(
+                            lf, "INFO", "Fallback provider returned payloads",
+                            fallback=fb_name, count=len(fb_payloads),
+                        )
+                    except Exception as exc:  # noqa: BLE001
+                        self._write_log(
+                            lf, "ERROR", "Fallback provider failed",
+                            fallback=fb_name, error=str(exc),
+                        )
 
                 for payload in all_payloads:
                     # Check cancel flag at the start of each iteration

@@ -97,7 +97,7 @@ def engine_and_session():
 # ---------------------------------------------------------------------------
 
 
-def _run_pipeline_with_session(engine, query, scrapers, extractor):
+def _run_pipeline_with_session(engine, query, scrapers, extractor, fallback=None):
     """Run the pipeline but patch SessionLocal to use an in-memory engine."""
     import db.models as models_mod
 
@@ -125,7 +125,7 @@ def _run_pipeline_with_session(engine, query, scrapers, extractor):
     try:
         from pipeline import Pipeline
 
-        pipeline = Pipeline(scrapers=scrapers, extractor=extractor)
+        pipeline = Pipeline(scrapers=scrapers, extractor=extractor, fallback=fallback)
         run_id = pipeline.run(query)
         return run_id
     finally:
@@ -340,6 +340,162 @@ class TestPipelineScanProducesClosedRun:
         assert run.stats["total_tokens"] == 420  # one call: 300 + 120 + 0
         assert len(listings) == 3
         assert len(snaps) == 3
+
+
+# ---------------------------------------------------------------------------
+# Fallback auto-engagement tests (Pipeline.run)
+# ---------------------------------------------------------------------------
+
+
+class BlockedScraper(ScrapeProvider):
+    """Primary scraper that always raises BlockedError (CAPTCHA/IP block)."""
+
+    source = "airbnb"
+
+    def search(self, query: SearchQuery):  # noqa: ARG002
+        from scrapers.base import BlockedError
+
+        raise BlockedError(url="https://airbnb.com/s", reason="captcha challenge")
+
+
+class EmptyScraper(ScrapeProvider):
+    """Primary scraper that silently returns no payloads (the common Airbnb
+    datacenter-IP block symptom — no exception, just nothing captured)."""
+
+    source = "airbnb"
+
+    def search(self, query: SearchQuery):  # noqa: ARG002
+        return []
+
+
+class RecordingFallback(ScrapeProvider):
+    """Fallback provider stub: records calls and returns one fixed payload."""
+
+    def __init__(self, payload_text: str = "fallback-content") -> None:
+        self.calls: list[SearchQuery] = []
+        self._payload_text = payload_text
+
+    def search(self, query: SearchQuery):
+        self.calls.append(query)
+        return [_make_raw_payload(self._payload_text, source="fallback_brightdata")]
+
+
+def _ok_extraction() -> ExtractionResult:
+    return ExtractionResult(
+        listings=[_make_listing_extraction()],
+        input_tokens=10,
+        output_tokens=5,
+        cache_read_tokens=0,
+        status="ok",
+    )
+
+
+class TestFallbackAutoEngages:
+    """The paid fallback auto-engages inside Pipeline.run on block/empty."""
+
+    def test_engages_on_blocked_error(self):
+        eng = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
+        Base.metadata.create_all(eng)
+        Session = sessionmaker(bind=eng, autoflush=False, autocommit=False)
+
+        fallback = RecordingFallback()
+        run_id = _run_pipeline_with_session(
+            eng,
+            query=SearchQuery(area="Lisbon", sources=["airbnb"]),
+            scrapers=[BlockedScraper()],
+            extractor=FakeExtractor([_ok_extraction()]),
+            fallback=fallback,
+        )
+
+        with Session() as sess:
+            run = sess.get(SearchRun, run_id)
+
+        assert len(fallback.calls) == 1
+        assert fallback.calls[0].area == "Lisbon"
+        assert run.stats["fallback_engaged"] is True
+        assert run.stats["total_listings"] == 1  # fallback payload was extracted
+
+    def test_engages_on_empty_result(self):
+        eng = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
+        Base.metadata.create_all(eng)
+        Session = sessionmaker(bind=eng, autoflush=False, autocommit=False)
+
+        fallback = RecordingFallback()
+        run_id = _run_pipeline_with_session(
+            eng,
+            query=SearchQuery(area="Lisbon", sources=["airbnb"]),
+            scrapers=[EmptyScraper()],
+            extractor=FakeExtractor([_ok_extraction()]),
+            fallback=fallback,
+        )
+
+        with Session() as sess:
+            run = sess.get(SearchRun, run_id)
+
+        assert len(fallback.calls) == 1
+        assert run.stats["fallback_engaged"] is True
+
+    def test_not_engaged_when_primary_succeeds(self):
+        eng = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
+        Base.metadata.create_all(eng)
+        Session = sessionmaker(bind=eng, autoflush=False, autocommit=False)
+
+        fallback = RecordingFallback()
+        run_id = _run_pipeline_with_session(
+            eng,
+            query=SearchQuery(area="Lisbon", sources=["airbnb"]),
+            scrapers=[FakeScraper([_make_raw_payload("real-content")])],
+            extractor=FakeExtractor([_ok_extraction()]),
+            fallback=fallback,
+        )
+
+        with Session() as sess:
+            run = sess.get(SearchRun, run_id)
+
+        assert fallback.calls == []
+        assert run.stats["fallback_engaged"] is False
+
+    def test_engaged_once_across_multiple_blocked_scrapers(self):
+        """Two blocked primary scrapers still trigger only one paid fallback call."""
+        eng = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
+        Base.metadata.create_all(eng)
+        Session = sessionmaker(bind=eng, autoflush=False, autocommit=False)
+
+        fallback = RecordingFallback()
+        run_id = _run_pipeline_with_session(
+            eng,
+            query=SearchQuery(area="Lisbon", sources=["airbnb", "booking"]),
+            scrapers=[BlockedScraper(), EmptyScraper()],
+            extractor=FakeExtractor([_ok_extraction()]),
+            fallback=fallback,
+        )
+
+        with Session() as sess:
+            run = sess.get(SearchRun, run_id)
+
+        assert len(fallback.calls) == 1
+        assert run.stats["fallback_engaged"] is True
+
+    def test_no_fallback_configured_degrades_gracefully(self):
+        """Blocked primary + no fallback → run completes with zero listings."""
+        eng = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
+        Base.metadata.create_all(eng)
+        Session = sessionmaker(bind=eng, autoflush=False, autocommit=False)
+
+        run_id = _run_pipeline_with_session(
+            eng,
+            query=SearchQuery(area="Lisbon", sources=["airbnb"]),
+            scrapers=[BlockedScraper()],
+            extractor=FakeExtractor([]),
+            fallback=None,
+        )
+
+        with Session() as sess:
+            run = sess.get(SearchRun, run_id)
+
+        assert run.status == "done"
+        assert run.stats["total_listings"] == 0
+        assert run.stats["fallback_engaged"] is False
 
 
 # ---------------------------------------------------------------------------
