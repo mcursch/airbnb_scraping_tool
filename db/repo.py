@@ -565,6 +565,37 @@ class Repo:
         session.flush()
         return snap
 
+    # ------------------------------------------------------------------ ExtractionLog
+    def log_extraction(
+        self,
+        session: Session,
+        raw_scrape_id: int,
+        model: str,
+        input_tokens: int = 0,
+        output_tokens: int = 0,
+        cache_read_tokens: int = 0,
+        status: str = "ok",
+        error: str | None = None,
+        listing_id: int | None = None,
+    ) -> ExtractionLog:
+        """Record token usage / outcome for one extraction call.
+
+        Feeds the run-history cost rollup (:func:`get_all_runs_with_cost`).
+        """
+        log = ExtractionLog(
+            raw_scrape_id=raw_scrape_id,
+            listing_id=listing_id,
+            model=model,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            cache_read_tokens=cache_read_tokens,
+            status=status,
+            error=error,
+        )
+        session.add(log)
+        session.flush()
+        return log
+
     # ------------------------------------------------------------------ Purge
     def purge_run(self, session: Session, run_id: int) -> dict[str, int]:
         """Delete all snapshots for *run_id*, then remove orphaned listings.

@@ -563,12 +563,29 @@ class Pipeline:
                     # LLM extraction — one API call per scraped page can yield
                     # many listings (search-results pages); upsert each.
                     result = self._extractor.extract(payload.source, payload.url, payload.payload)
+                    model = getattr(self._extractor, "model", config_mod.settings.llm_model)
 
                     if result.status != "ok" or not result.listings:
                         self._write_log(
                             lf, "WARNING", "Extraction failed or empty",
                             url=payload.url, error=result.error,
                         )
+                        # Record the failed call so run-history cost accounting
+                        # (get_all_runs_with_cost) sees every extraction attempt.
+                        self._repo.log_extraction(
+                            sess,
+                            raw_scrape_id=raw_scrape.id,
+                            model=model,
+                            input_tokens=result.input_tokens,
+                            output_tokens=result.output_tokens,
+                            cache_read_tokens=result.cache_read_tokens,
+                            status="failed",
+                            error=result.error,
+                        )
+                        raw_scrape.status = "failed"
+                        stats["total_tokens"] += result.total_tokens
+                        stats["estimated_cost_usd"] += result.estimated_cost_usd
+                        sess.flush()
                         continue
 
                     for listing_ex in result.listings:
@@ -627,6 +644,16 @@ class Pipeline:
                         )
 
                     raw_scrape.status = "extracted"
+                    # One ExtractionLog per extraction call feeds run-history cost.
+                    self._repo.log_extraction(
+                        sess,
+                        raw_scrape_id=raw_scrape.id,
+                        model=model,
+                        input_tokens=result.input_tokens,
+                        output_tokens=result.output_tokens,
+                        cache_read_tokens=result.cache_read_tokens,
+                        status="ok",
+                    )
                     sess.flush()
 
                     # Token usage is per extraction call (one call per page).
@@ -635,6 +662,9 @@ class Pipeline:
 
                 # Close the run
                 final_status = "cancelled" if cancelled else "done"
+                # Mirror total_listings as listing_count for the run-history page
+                # (get_all_runs_with_cost reads stats["listing_count"]).
+                stats["listing_count"] = stats["total_listings"]
                 self._repo.record_run_stats(sess, run_id, stats)
                 self._repo.close_run(sess, run_id, status=final_status)
                 sess.commit()
