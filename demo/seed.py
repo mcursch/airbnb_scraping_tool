@@ -48,14 +48,12 @@ DEMO_HOTELS: list[dict] = [
 _DEMO_ID_PREFIX = "demo-"
 
 
-def seed_demo_run(*, replace_existing: bool = True) -> int:
-    """Create the preset demo run and return its ``run_id``.
+def clear_demo_data() -> int:
+    """Remove the demo run + its listings/snapshots entirely. Returns #listings removed.
 
-    When *replace_existing* is True (default), any prior demo run and its demo
-    listings/snapshots are removed first so the demo always starts clean and
-    re-runnable.
+    Idempotent: a no-op (returns 0) when there's no demo data. Used both by the
+    cleanup button and by :func:`seed_demo_run` when re-seeding.
     """
-    # Imported at call time so tests can monkey-patch SessionLocal / init_db.
     from db.models import (
         Listing,
         ListingSnapshot,
@@ -67,28 +65,44 @@ def seed_demo_run(*, replace_existing: bool = True) -> int:
     init_db()
     sess = SessionLocal()
     try:
-        if replace_existing:
-            demo_listings = (
-                sess.query(Listing)
-                .filter(Listing.source_listing_id.like(f"{_DEMO_ID_PREFIX}%"))
-                .all()
-            )
-            demo_ids = [listing.id for listing in demo_listings]
-            if demo_ids:
-                sess.query(ListingSnapshot).filter(
-                    ListingSnapshot.listing_id.in_(demo_ids)
-                ).delete(synchronize_session=False)
-            sess.query(Listing).filter(
-                Listing.source_listing_id.like(f"{_DEMO_ID_PREFIX}%")
+        demo_ids = [
+            listing.id
+            for listing in sess.query(Listing)
+            .filter(Listing.source_listing_id.like(f"{_DEMO_ID_PREFIX}%"))
+            .all()
+        ]
+        if demo_ids:
+            sess.query(ListingSnapshot).filter(
+                ListingSnapshot.listing_id.in_(demo_ids)
             ).delete(synchronize_session=False)
-            sess.query(SearchRun).filter(
-                SearchRun.area_query == DEMO_AREA
-            ).delete(synchronize_session=False)
-            # Commit + expire so deleted rows leave the identity map before we
-            # insert fresh listings (avoids identity-map collision warnings).
-            sess.commit()
-            sess.expire_all()
+        sess.query(Listing).filter(
+            Listing.source_listing_id.like(f"{_DEMO_ID_PREFIX}%")
+        ).delete(synchronize_session=False)
+        sess.query(SearchRun).filter(
+            SearchRun.area_query == DEMO_AREA
+        ).delete(synchronize_session=False)
+        sess.commit()
+        return len(demo_ids)
+    finally:
+        sess.close()
 
+
+def seed_demo_run(*, replace_existing: bool = True) -> int:
+    """Create the preset demo run and return its ``run_id``.
+
+    When *replace_existing* is True (default), any prior demo data is removed
+    first (via :func:`clear_demo_data`) so the demo always starts clean and is
+    fully re-runnable — making practice runs idempotent.
+    """
+    # Imported at call time so tests can monkey-patch SessionLocal / init_db.
+    from db.models import Listing, ListingSnapshot, SearchRun, SessionLocal, init_db
+
+    init_db()
+    if replace_existing:
+        clear_demo_data()
+
+    sess = SessionLocal()
+    try:
         now = datetime.now(timezone.utc)
         n = len(DEMO_HOTELS)
         run = SearchRun(

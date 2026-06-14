@@ -115,17 +115,27 @@ def render() -> None:
         st.caption(
             "Loads 5 real Lisbon hotels with blank details. Go to **Results**, "
             "pick the demo run, and click **Enrich now** to watch the blanks fill "
-            "with web-sourced data + citations."
+            "with web-sourced data + citations. **Loading again resets it to blank** "
+            "— so practice runs are safe and repeatable."
         )
-        if st.button("🎬 Load hotel demo", use_container_width=True):
-            from demo.seed import seed_demo_run
+        dcol1, dcol2 = st.columns(2)
+        with dcol1:
+            if st.button("🎬 Load / reset hotel demo", use_container_width=True):
+                from demo.seed import seed_demo_run
 
-            run_id = seed_demo_run()
-            st.session_state["last_run_id"] = run_id
-            st.success(
-                f"Loaded demo run **#{run_id}** (5 Lisbon hotels). "
-                "Open the **Results** page, select it, and click **Enrich now**."
-            )
+                run_id = seed_demo_run()
+                st.session_state["last_run_id"] = run_id
+                st.success(
+                    f"Loaded demo run **#{run_id}** (5 Lisbon hotels, all blank). "
+                    "Open the **Results** page, select it, and click **Enrich now**."
+                )
+        with dcol2:
+            if st.button("🧹 Remove demo data", use_container_width=True):
+                from demo.seed import clear_demo_data
+
+                removed = clear_demo_data()
+                st.session_state.pop("last_run_id", None)
+                st.success(f"Removed demo data ({removed} demo listings cleared).")
 
     # Map-based area picker (outside the form so clicks register immediately).
     _render_area_picker()

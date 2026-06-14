@@ -72,7 +72,7 @@ def test_seed_listings_have_enrichable_gaps(in_memory_db):
 
 
 def test_seed_replaces_existing(in_memory_db):
-    """Re-seeding does not duplicate listings or runs."""
+    """Re-seeding does not duplicate listings or runs (idempotent)."""
     from demo.seed import DEMO_AREA, DEMO_HOTELS, seed_demo_run
 
     seed_demo_run()
@@ -86,3 +86,47 @@ def test_seed_replaces_existing(in_memory_db):
 
     assert n_listings == len(DEMO_HOTELS)  # not doubled
     assert n_runs == 1
+
+
+def test_reseed_resets_enriched_state(in_memory_db):
+    """Re-seeding wipes any enrichment written to demo listings (clean practice run)."""
+    from demo.seed import seed_demo_run
+
+    seed_demo_run()
+    # Simulate a prior enrichment having filled fields on a demo listing.
+    with in_memory_db() as s:
+        lst = s.scalars(select(Listing)).first()
+        lst.rating = 4.9
+        lst.enrichment_status = "enriched"
+        lst.enrichment = {"rating": {"value": 4.9}}
+        s.commit()
+
+    seed_demo_run()  # reset
+
+    with in_memory_db() as s:
+        for lst in s.scalars(select(Listing)).all():
+            assert lst.rating is None
+            assert lst.enrichment_status is None
+            assert lst.enrichment is None
+
+
+def test_clear_demo_data(in_memory_db):
+    """Cleanup removes all demo runs/listings/snapshots and is idempotent."""
+    from demo.seed import DEMO_AREA, DEMO_HOTELS, clear_demo_data, seed_demo_run
+
+    seed_demo_run()
+    removed = clear_demo_data()
+    assert removed == len(DEMO_HOTELS)
+
+    with in_memory_db() as s:
+        assert s.scalar(select(func.count()).select_from(Listing)) == 0
+        assert s.scalar(select(func.count()).select_from(ListingSnapshot)) == 0
+        assert (
+            s.scalar(
+                select(func.count()).select_from(SearchRun).where(SearchRun.area_query == DEMO_AREA)
+            )
+            == 0
+        )
+
+    # Second clear is a harmless no-op.
+    assert clear_demo_data() == 0
