@@ -21,6 +21,10 @@ from typing import Optional
 
 from pydantic import BaseModel, Field, model_validator
 
+# SearchQuery is defined once in schemas.models; re-exported here so the
+# canonical query type is shared by every provider (no duplicate definitions).
+from schemas.models import SearchQuery  # noqa: F401 — re-exported
+
 
 # ---------------------------------------------------------------------------
 # Exceptions
@@ -45,16 +49,6 @@ class BlockedError(Exception):
 # ---------------------------------------------------------------------------
 # Value objects
 # ---------------------------------------------------------------------------
-
-
-class SearchQuery(BaseModel):
-    """Parameters for a single scraper search call."""
-
-    area: str
-    checkin: Optional[str] = None   # ISO date string, e.g. "2025-08-01"
-    checkout: Optional[str] = None  # ISO date string, e.g. "2025-08-07"
-    guests: int = 2
-    page_limit: int = 5
 
 
 class RawScrape(BaseModel):

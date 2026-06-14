@@ -1,16 +1,9 @@
-"""Search-query schema shared across all scraper providers."""
+"""Backwards-compatible re-export.
 
-from __future__ import annotations
+``SearchQuery`` is defined once in :mod:`schemas.models`; this module re-exports
+it so existing imports (``from schemas.search import SearchQuery``) keep working.
+"""
 
-import datetime
+from schemas.models import SearchQuery
 
-from pydantic import BaseModel
-
-
-class SearchQuery(BaseModel):
-    """Describes a user's search request passed to every ScrapeProvider."""
-
-    area: str
-    checkin: datetime.date | None = None
-    checkout: datetime.date | None = None
-    guests: int = 1
+__all__ = ["SearchQuery"]

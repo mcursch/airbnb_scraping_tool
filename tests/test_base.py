@@ -42,7 +42,7 @@ class TestSearchQuery:
         q = SearchQuery(area="Paris, France")
         assert q.checkin is None
         assert q.checkout is None
-        assert q.guests is None
+        assert q.guests == 1
         assert q.sources == ["airbnb"]
 
     def test_custom_values(self):

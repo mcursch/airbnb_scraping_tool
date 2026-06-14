@@ -29,11 +29,12 @@ class SearchQuery(BaseModel):
     area: str = Field(..., min_length=1, description="Free-text area / city query")
     checkin: Optional[date] = Field(None, description="Check-in date (ISO 8601)")
     checkout: Optional[date] = Field(None, description="Check-out date (ISO 8601)")
-    guests: Optional[int] = Field(None, ge=1, description="Number of guests (≥1)")
+    guests: int = Field(1, ge=1, description="Number of guests (≥1)")
     sources: list[Source] = Field(
         default_factory=lambda: ["airbnb"],
         description="Scraping sources to include",
     )
+    page_limit: int = Field(5, ge=1, description="Max pages to fetch per source")
 
     @model_validator(mode="after")
     def checkout_after_checkin(self) -> "SearchQuery":

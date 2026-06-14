@@ -41,7 +41,7 @@ class TestSearchQuery:
         q = SearchQuery(area="Lisbon, Portugal")
         assert q.area == "Lisbon, Portugal"
         assert q.checkin is None
-        assert q.guests is None
+        assert q.guests == 1
         assert q.sources == ["airbnb"]
 
     def test_valid_full(self):
