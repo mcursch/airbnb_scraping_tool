@@ -4,8 +4,8 @@ This module orchestrates the three main stages of the Short-Stay Market
 Scanner.  All stages (acquire, extract, store) are fully wired.
 
 Public API:
-  - ``SessionLocal``    — re-exported from airbnb_scraping_tool.db.models
-  - ``init_db``         — re-exported from airbnb_scraping_tool.db.models
+  - ``SessionLocal``    — re-exported from db.models
+  - ``init_db``         — re-exported from db.models
   - ``Pipeline``        — full acquire→extract→store orchestration class
   - ``PipelineResult``  — result type returned by ``run_search``
   - ``run_search``      — high-level entry point used by the dashboard
@@ -27,9 +27,9 @@ from typing import Any, Callable, Sequence
 
 import config as config_mod
 from scrapers.base import BlockedError, ScrapeProvider, SearchQuery as FlatSearchQuery
-from airbnb_scraping_tool.db.models import SessionLocal, init_db  # noqa: F401 — re-exported
-from airbnb_scraping_tool.db.repo import Repo
-from airbnb_scraping_tool.schemas import RawPayload, SearchQuery
+from db.models import SessionLocal, init_db  # noqa: F401 — re-exported
+from db.repo import Repo
+from schemas.models import RawPayload, SearchQuery
 
 logger = logging.getLogger(__name__)
 
@@ -106,14 +106,14 @@ def run_search(
     sources = list(query.sources) if query.sources else ["airbnb"]
     if "airbnb" in sources:
         try:
-            from airbnb_scraping_tool.scrapers.airbnb import AirbnbScraper  # type: ignore[import]
+            from scrapers.airbnb import AirbnbScraper  # type: ignore[import]
             scrapers.append(AirbnbScraper())
         except (ImportError, Exception):  # noqa: BLE001
             logger.warning("Airbnb scraper not available; skipping.")
 
     if "booking" in sources or "hotels" in sources:
         try:
-            from airbnb_scraping_tool.scrapers.booking import BookingScraper  # type: ignore[import]
+            from scrapers.booking import BookingScraper  # type: ignore[import]
             scrapers.append(BookingScraper())
         except (ImportError, Exception):  # noqa: BLE001
             logger.warning("Booking.com scraper not available; skipping.")
@@ -121,7 +121,7 @@ def run_search(
     _progress(0.10, "Building extractor…")
 
     try:
-        from airbnb_scraping_tool.extraction.extractor import Extractor
+        from extraction.provider import Extractor
         import anthropic
 
         client = anthropic.Anthropic(
@@ -246,7 +246,7 @@ def run_acquire(
 def process_raw_scrape(session: Any, raw_scrape: Any, extractor: Any) -> Any:
     """Process a single RawScrape with content-hash deduplication.
 
-    Uses the *flat* ``db.models`` ORM classes (not ``airbnb_scraping_tool.db.models``).
+    Uses the ``db.models`` ORM classes.
     The caller is responsible for flushing/committing the session.
 
     Algorithm:
@@ -358,7 +358,7 @@ def process_raw_scrape(session: Any, raw_scrape: Any, extractor: Any) -> Any:
 
 
 # ---------------------------------------------------------------------------
-# Pipeline class — uses airbnb_scraping_tool.db.models
+# Pipeline class — uses db.models
 # ---------------------------------------------------------------------------
 
 
@@ -469,7 +469,7 @@ class Pipeline:
         # ------------------------------------------------------------------
         # Normal run — acquire → (extract) → store
         # ------------------------------------------------------------------
-        from airbnb_scraping_tool.db.models import (
+        from db.models import (
             RawScrape as AirbnbRawScrape,
         )
 

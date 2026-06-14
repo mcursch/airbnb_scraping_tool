@@ -7,6 +7,8 @@ from raw scraped content.
 """
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 
@@ -44,6 +46,12 @@ class ExtractedListing(BaseModel):
     nightly_price: float | None = Field(None, description="Nightly price before fees")
     currency: str | None = Field(None, description="ISO 4217 currency code, e.g. USD")
     total_price: float | None = Field(None, description="Total price for the requested stay")
+    fees: dict[str, Any] = Field(
+        default_factory=dict, description="Itemised fees (cleaning, service, etc.)"
+    )
+    availability: bool | None = Field(
+        None, description="True if available for the requested dates"
+    )
 
 
 class ListingExtraction(BaseModel):

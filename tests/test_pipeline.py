@@ -13,11 +13,12 @@ import pytest
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 
-from airbnb_scraping_tool.db.models import Base, Listing, ListingSnapshot, SearchRun
-from airbnb_scraping_tool.db.repo import Repo
-from airbnb_scraping_tool.extraction.extractor import ExtractionResult, Extractor
-from airbnb_scraping_tool.schemas import ListingExtraction, RawPayload, SearchQuery
-from airbnb_scraping_tool.scrapers.base import ScrapeProvider
+from db.models import Base, Listing, ListingSnapshot, SearchRun
+from db.repo import Repo
+from extraction.provider import ExtractionResult, Extractor
+from schemas.listing import ExtractedListing
+from schemas.models import SearchQuery
+from scrapers.base import RawPayload, ScrapeProvider
 
 
 # ---------------------------------------------------------------------------
@@ -54,7 +55,7 @@ class FakeExtractor(Extractor):
         return self._results.pop(0)
 
 
-def _make_listing_extraction(**overrides) -> ListingExtraction:
+def _make_listing_extraction(**overrides) -> ExtractedListing:
     defaults = dict(
         source_listing_id="abc123",
         name="Cozy Studio",
@@ -63,7 +64,7 @@ def _make_listing_extraction(**overrides) -> ListingExtraction:
         currency="USD",
     )
     defaults.update(overrides)
-    return ListingExtraction(**defaults)
+    return ExtractedListing(**defaults)
 
 
 def _make_raw_payload(payload: str = "raw content", source: str = "airbnb") -> RawPayload:
@@ -98,7 +99,7 @@ def engine_and_session():
 
 def _run_pipeline_with_session(engine, query, scrapers, extractor):
     """Run the pipeline but patch SessionLocal to use an in-memory engine."""
-    import airbnb_scraping_tool.db.models as models_mod
+    import db.models as models_mod
 
     # Monkey-patch the SessionLocal in the models module so pipeline.py picks
     # up our in-memory engine.

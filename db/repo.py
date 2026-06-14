@@ -9,10 +9,10 @@ immediately.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import create_engine, event, func
+from sqlalchemy import create_engine, delete, event, func, select
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -438,6 +438,167 @@ def list_search_runs(limit: int = 50, engine: Engine | None = None) -> list[dict
             }
             for r in runs
         ]
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+class Repo:
+    """Object-oriented data-access wrapper used by the pipeline and CLI.
+
+    Complements the module-level functions above; both operate on the same
+    ``db.models`` ORM classes.  Every method takes a caller-supplied
+    ``Session`` and flushes (but does not commit) so PKs are available on
+    return while the caller controls transaction boundaries.
+
+    JSON columns (``amenities``, ``images``, ``fees``, ``sources``, ``stats``)
+    are stored as native Python objects — SQLAlchemy's ``JSON`` type handles
+    serialisation, so callers pass lists/dicts directly (no ``json.dumps``).
+    """
+
+    # ------------------------------------------------------------------ SearchRun
+    def open_run(self, session: Session, area_query: str, **kwargs: Any) -> SearchRun:
+        """Create and persist a new SearchRun in 'running' status."""
+        run = SearchRun(
+            area_query=area_query,
+            checkin=kwargs.get("checkin"),
+            checkout=kwargs.get("checkout"),
+            guests=kwargs.get("guests", 1),
+            sources=kwargs.get("sources", ["airbnb", "booking"]),
+            status="running",
+        )
+        session.add(run)
+        session.flush()
+        return run
+
+    def close_run(self, session: Session, run_id: int, status: str = "done") -> None:
+        """Set ``finished_at`` and ``status`` on a run."""
+        run = session.get(SearchRun, run_id)
+        if run is None:
+            raise ValueError(f"SearchRun {run_id} not found")
+        run.finished_at = _utcnow()
+        run.status = status
+        session.flush()
+
+    def record_run_stats(self, session: Session, run_id: int, stats: dict[str, Any]) -> None:
+        """Persist aggregated stats to ``SearchRun.stats`` (see pipeline for keys)."""
+        run = session.get(SearchRun, run_id)
+        if run is None:
+            raise ValueError(f"SearchRun {run_id} not found")
+        run.stats = stats
+        session.flush()
+
+    def get_run(self, session: Session, run_id: int) -> SearchRun | None:
+        return session.get(SearchRun, run_id)
+
+    # ------------------------------------------------------------------ RawScrape
+    def find_by_hash(self, session: Session, content_hash: str) -> RawScrape | None:
+        stmt = select(RawScrape).where(RawScrape.content_hash == content_hash).limit(1)
+        return session.scalars(stmt).first()
+
+    def mark_scrape_status(
+        self, session: Session, raw_scrape_id: int, status: str, error: str | None = None
+    ) -> None:
+        rs = session.get(RawScrape, raw_scrape_id)
+        if rs:
+            rs.status = status
+            rs.error = error
+            session.flush()
+
+    # ------------------------------------------------------------------ Listing
+    def upsert_listing(
+        self,
+        session: Session,
+        source: str,
+        source_listing_id: str,
+        **fields: Any,
+    ) -> tuple[Listing, bool, bool]:
+        """Insert or update a listing keyed on (source, source_listing_id).
+
+        Returns ``(listing, is_new, was_updated)``.
+        """
+        stmt = select(Listing).where(
+            Listing.source == source,
+            Listing.source_listing_id == source_listing_id,
+        )
+        existing = session.scalars(stmt).first()
+
+        if existing is None:
+            listing = Listing(source=source, source_listing_id=source_listing_id, **fields)
+            session.add(listing)
+            session.flush()
+            return listing, True, False
+
+        was_updated = False
+        for key, value in fields.items():
+            if value is not None and hasattr(existing, key) and getattr(existing, key) != value:
+                setattr(existing, key, value)
+                was_updated = True
+        if was_updated:
+            existing.last_seen_at = _utcnow()
+            session.flush()
+        return existing, False, was_updated
+
+    # ------------------------------------------------------------------ Snapshot
+    def insert_snapshot(
+        self,
+        session: Session,
+        listing_id: int,
+        run_id: int,
+        nightly_price: float | None = None,
+        currency: str | None = None,
+        total_price: float | None = None,
+        fees: dict[str, Any] | None = None,
+        availability: bool | str | None = None,
+    ) -> ListingSnapshot:
+        snap = ListingSnapshot(
+            listing_id=listing_id,
+            run_id=run_id,
+            nightly_price=nightly_price,
+            currency=currency,
+            total_price=total_price,
+            fees=fees,
+            availability=availability,
+        )
+        session.add(snap)
+        session.flush()
+        return snap
+
+    # ------------------------------------------------------------------ Purge
+    def purge_run(self, session: Session, run_id: int) -> dict[str, int]:
+        """Delete all snapshots for *run_id*, then remove orphaned listings.
+
+        A listing is orphaned when it has no remaining snapshots after the
+        purge.  Returns ``{"snapshots_deleted": N, "listings_deleted": M}``.
+        """
+        listing_ids = list(
+            session.scalars(
+                select(ListingSnapshot.listing_id).where(ListingSnapshot.run_id == run_id)
+            ).all()
+        )
+
+        snaps_deleted = session.execute(
+            delete(ListingSnapshot).where(ListingSnapshot.run_id == run_id)
+        ).rowcount
+
+        orphan_ids = [
+            lid
+            for lid in listing_ids
+            if session.scalars(
+                select(ListingSnapshot.id).where(ListingSnapshot.listing_id == lid).limit(1)
+            ).first()
+            is None
+        ]
+
+        listings_deleted = 0
+        if orphan_ids:
+            listings_deleted = session.execute(
+                delete(Listing).where(Listing.id.in_(orphan_ids))
+            ).rowcount
+
+        session.flush()
+        return {"snapshots_deleted": snaps_deleted, "listings_deleted": listings_deleted}
 
 
 def get_all_runs_with_cost(session: Session) -> list[dict[str, Any]]:

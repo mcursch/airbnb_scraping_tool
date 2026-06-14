@@ -1,4 +1,4 @@
-"""SQLAlchemy ORM models for the Short-Stay Market Scanner."""
+"""SQLAlchemy ORM models for Roomradar."""
 
 from datetime import datetime
 
@@ -15,8 +15,12 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    create_engine,
+    event,
 )
-from sqlalchemy.orm import DeclarativeBase, relationship
+from sqlalchemy.orm import DeclarativeBase, Session, relationship, sessionmaker
+
+from config import settings
 
 
 class Base(DeclarativeBase):
@@ -175,3 +179,34 @@ class ExtractionLog(Base):
     def cache_read_input_tokens(self) -> int | None:
         """Alias for ``cache_read_tokens`` matching the Anthropic SDK field name."""
         return self.cache_read_tokens
+
+
+# ---------------------------------------------------------------------------
+# Engine & session factory
+#
+# Created here so every module that needs a session imports ``engine`` /
+# ``SessionLocal`` from one place.  ``init_db`` creates all tables.  Tests
+# monkey-patch ``SessionLocal`` / ``engine`` / ``init_db`` to use an in-memory
+# database, so keep these as module-level names.
+# ---------------------------------------------------------------------------
+
+engine = create_engine(
+    settings.db_url,
+    connect_args={"check_same_thread": False},
+    echo=False,
+)
+
+
+@event.listens_for(engine, "connect")
+def _set_sqlite_pragmas(dbapi_conn, _record):  # noqa: ANN001
+    cursor = dbapi_conn.cursor()
+    cursor.execute("PRAGMA journal_mode=WAL")
+    cursor.close()
+
+
+SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+
+def init_db() -> None:
+    """Create all tables if they do not already exist."""
+    Base.metadata.create_all(engine)
