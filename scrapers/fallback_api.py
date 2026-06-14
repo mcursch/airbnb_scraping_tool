@@ -50,14 +50,37 @@ class FallbackApiProvider(ScrapeProvider):
     """
 
     def __init__(self, http_client: httpx.Client | None = None) -> None:
-        self._http_client = http_client if http_client is not None else httpx.Client()
+        # Web Unlocker / paid solvers can take tens of seconds on hard targets
+        # (e.g. DataDome-protected Vrbo/Expedia), so use a generous timeout —
+        # httpx's 5s default would abort mid-solve.
+        self._http_client = (
+            http_client if http_client is not None else httpx.Client(timeout=120.0)
+        )
 
     # ------------------------------------------------------------------
     # ScrapeProvider interface
     # ------------------------------------------------------------------
 
-    def search(self, query: SearchQuery) -> list[RawScrape]:  # type: ignore[override]
+    def search(
+        self,
+        query: SearchQuery,
+        *,
+        target_url: str | None = None,
+        source_label: str | None = None,
+    ) -> list[RawScrape]:  # type: ignore[override]
         """Proxy the search through the external scraping API.
+
+        Parameters
+        ----------
+        target_url:
+            Exact URL to fetch through the paid provider. When omitted, the
+            Airbnb search URL for *query* is used (backward-compatible default).
+            Pass the blocked source's own search URL to make the fallback
+            source-aware (e.g. fetch the Vrbo/Expedia/Booking page, not Airbnb).
+        source_label:
+            Source identifier to stamp on the returned :class:`RawScrape` (e.g.
+            ``"vrbo"``), so the fetched data is attributed to the real source.
+            Defaults to a ``"fallback_<provider>"`` marker.
 
         Raises
         ------
@@ -78,13 +101,14 @@ class FallbackApiProvider(ScrapeProvider):
             )
 
         provider: str = getattr(settings, "FALLBACK_PROVIDER", "scraperapi")
+        url = target_url or self._build_airbnb_url(query)
 
         if provider == "scraperapi":
-            return self._search_scraperapi(query, str(api_key))
+            return self._search_scraperapi(url, str(api_key), source_label)
         if provider == "apify":
-            return self._search_apify(query, str(api_key))
+            return self._search_apify(url, str(api_key), source_label)
         if provider == "brightdata":
-            return self._search_brightdata(query, str(api_key))
+            return self._search_brightdata(url, str(api_key), source_label)
 
         raise ConfigurationError(
             f"Unknown FALLBACK_PROVIDER {provider!r}. "
@@ -100,8 +124,9 @@ class FallbackApiProvider(ScrapeProvider):
         area_encoded = urllib.parse.quote(query.area, safe="")
         return _AIRBNB_SEARCH_PATH.format(area=area_encoded)
 
-    def _search_scraperapi(self, query: SearchQuery, api_key: str) -> list[RawScrape]:  # type: ignore[override]
-        target_url = self._build_airbnb_url(query)
+    def _search_scraperapi(
+        self, target_url: str, api_key: str, source_label: str | None = None
+    ) -> list[RawScrape]:  # type: ignore[override]
         try:
             response = self._http_client.get(
                 _SCRAPERAPI_URL,
@@ -115,14 +140,15 @@ class FallbackApiProvider(ScrapeProvider):
 
         return [
             RawScrape(
-                source="fallback_scraperapi",
+                source=source_label or "fallback_scraperapi",
                 url=target_url,
                 payload=response.text,
             )
         ]
 
-    def _search_apify(self, query: SearchQuery, api_key: str) -> list[RawScrape]:  # type: ignore[override]
-        target_url = self._build_airbnb_url(query)
+    def _search_apify(
+        self, target_url: str, api_key: str, source_label: str | None = None
+    ) -> list[RawScrape]:  # type: ignore[override]
         try:
             response = self._http_client.post(
                 _APIFY_RUN_URL,
@@ -137,22 +163,24 @@ class FallbackApiProvider(ScrapeProvider):
 
         return [
             RawScrape(
-                source="fallback_apify",
+                source=source_label or "fallback_apify",
                 url=target_url,
                 payload=response.text,
             )
         ]
 
-    def _search_brightdata(self, query: SearchQuery, api_key: str) -> list[RawScrape]:  # type: ignore[override]
-        """Fetch the Airbnb search page through Bright Data's Web Unlocker.
+    def _search_brightdata(
+        self, target_url: str, api_key: str, source_label: str | None = None
+    ) -> list[RawScrape]:  # type: ignore[override]
+        """Fetch *target_url* through Bright Data's Web Unlocker.
 
         Pay-per-successful-request; returns the raw page body (``format: raw``)
         which the LLM extractor then parses, just like the ScraperAPI path.
+        Works for any source's URL (Airbnb, Vrbo, Expedia, …), not just Airbnb.
         """
         from config import settings
 
         zone = getattr(settings, "BRIGHTDATA_ZONE", "") or "web_unlocker"
-        target_url = self._build_airbnb_url(query)
         try:
             response = self._http_client.post(
                 _BRIGHTDATA_URL,
@@ -170,7 +198,7 @@ class FallbackApiProvider(ScrapeProvider):
 
         return [
             RawScrape(
-                source="fallback_brightdata",
+                source=source_label or "fallback_brightdata",
                 url=target_url,
                 payload=response.text,
             )

@@ -196,6 +196,10 @@ class BookingScraper(ScrapeProvider):
 
         return results
 
+    def fallback_url(self, query: SearchQuery) -> str | None:
+        """Booking.com search URL for the paid fallback (Web Unlocker) to fetch."""
+        return self._build_url(query)
+
     # ------------------------------------------------------------------
     # Internal: URL construction
     # ------------------------------------------------------------------

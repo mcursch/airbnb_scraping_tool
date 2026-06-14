@@ -102,6 +102,10 @@ class ScrapeProvider(ABC):
         it to the user; they do *not* silently return empty results.
     """
 
+    #: Canonical source identifier for this provider (e.g. "airbnb", "vrbo").
+    #: Used to attribute fallback-fetched payloads to the right source.
+    SOURCE: str = "other"
+
     @abstractmethod
     def search(self, query: SearchQuery) -> list[RawScrape]:
         """
@@ -119,3 +123,14 @@ class ScrapeProvider(ABC):
             was injected at construction time.
         """
         ...
+
+    def fallback_url(self, query: SearchQuery) -> str | None:
+        """Return this source's search URL for the paid fallback to fetch.
+
+        When the primary scrape is blocked, the pipeline routes the *same*
+        source through the paid fallback (e.g. Bright Data Web Unlocker) using
+        this URL, so the fallback returns this platform's data rather than a
+        hardcoded one. Returns ``None`` if the source can't supply a URL (the
+        pipeline then skips the fallback for it rather than guessing).
+        """
+        return None

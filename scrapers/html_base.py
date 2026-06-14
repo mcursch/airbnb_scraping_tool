@@ -92,6 +92,10 @@ class HtmlSearchScraper(ScrapeProvider):
     def build_url(self, query: SearchQuery) -> str:  # pragma: no cover - abstract
         raise NotImplementedError
 
+    def fallback_url(self, query: SearchQuery) -> str | None:
+        """Route this source through the paid fallback using its own search URL."""
+        return self.build_url(query)
+
     # ------------------------------------------------------------------ fetch
     def _fetch_page(self, url: str) -> RawScrape:
         try:

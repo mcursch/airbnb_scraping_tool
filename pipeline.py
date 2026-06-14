@@ -637,13 +637,14 @@ class Pipeline:
                 self._write_log(lf, "INFO", "Run started", run_id=run_id, area=query.area)
 
                 # Collect payloads from all scrapers. A primary scraper can fail
-                # two ways: an explicit BlockedError, or — the common Airbnb
-                # symptom from a datacenter IP — a silent empty result. Either
-                # way, engage the configured paid fallback (e.g. Bright Data Web
-                # Unlocker) once so the run still yields data. The fallback is
-                # only attempted when one is configured (SCRAPER_API_KEY set).
+                # two ways: an explicit BlockedError, or — the common datacenter-IP
+                # symptom — a silent empty result. Either way, route that source
+                # through the configured paid fallback (e.g. Bright Data Web
+                # Unlocker) using the source's OWN search URL, so the fetched data
+                # is attributed to the right source. Engaged once per source (to
+                # avoid double-billing) and only when a fallback is configured.
                 all_payloads: list[RawPayload] = []
-                fallback_attempted = False
+                fallback_done: set[str] = set()
                 for scraper in self._scrapers:
                     scraper_name = type(scraper).__name__
                     blocked_reason: str | None = None
@@ -669,9 +670,11 @@ class Pipeline:
                         all_payloads.extend(payloads)
                         continue
 
-                    # No payloads — blocked or empty. Try the fallback once.
-                    if self._fallback is None or fallback_attempted:
-                        if blocked_reason is None:
+                    # No payloads — blocked or empty. Route this source through
+                    # the paid fallback (once per source).
+                    source_label = getattr(scraper, "SOURCE", None) or "other"
+                    if self._fallback is None or source_label in fallback_done:
+                        if blocked_reason is None and self._fallback is None:
                             self._write_log(
                                 lf, "WARNING", "Scraper returned no payloads; "
                                 "no fallback available",
@@ -679,25 +682,43 @@ class Pipeline:
                             )
                         continue
 
-                    fallback_attempted = True
+                    # The fallback needs the source's own URL; skip if it can't
+                    # provide one (don't guess / fetch the wrong site).
+                    try:
+                        target_url = scraper.fallback_url(query)
+                    except Exception:  # noqa: BLE001
+                        target_url = None
+                    if not target_url:
+                        self._write_log(
+                            lf, "WARNING", "No fallback URL for source; skipping fallback",
+                            scraper=scraper_name, source=source_label,
+                        )
+                        continue
+
+                    fallback_done.add(source_label)
                     reason = blocked_reason or "no payloads returned"
                     fb_name = type(self._fallback).__name__
                     self._write_log(
                         lf, "INFO", "Engaging paid fallback provider",
-                        blocked_scraper=scraper_name, reason=reason, fallback=fb_name,
+                        blocked_scraper=scraper_name, source=source_label,
+                        reason=reason, fallback=fb_name, url=target_url,
                     )
                     try:
-                        fb_payloads = list(self._fallback.search(query))
+                        fb_payloads = list(
+                            self._fallback.search(
+                                query, target_url=target_url, source_label=source_label
+                            )
+                        )
                         stats["fallback_engaged"] = True
                         all_payloads.extend(fb_payloads)
                         self._write_log(
                             lf, "INFO", "Fallback provider returned payloads",
-                            fallback=fb_name, count=len(fb_payloads),
+                            fallback=fb_name, source=source_label, count=len(fb_payloads),
                         )
                     except Exception as exc:  # noqa: BLE001
                         self._write_log(
                             lf, "ERROR", "Fallback provider failed",
-                            fallback=fb_name, error=str(exc),
+                            fallback=fb_name, source=source_label, error=str(exc),
                         )
 
                 for payload in all_payloads:

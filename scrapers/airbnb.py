@@ -187,9 +187,15 @@ class AirbnbScraper(ScrapeProvider):
         self.extra_wait_min = extra_wait_min
         self.extra_wait_max = extra_wait_max
 
+    SOURCE = "airbnb"
+
     # ------------------------------------------------------------------
     # Public interface (synchronous, conforming to ScrapeProvider)
     # ------------------------------------------------------------------
+
+    def fallback_url(self, query: SearchQuery) -> str | None:
+        """Airbnb search URL for the paid fallback (Web Unlocker) to fetch."""
+        return build_search_url(query)
 
     def search(self, query: SearchQuery) -> list[BaseRawScrape]:
         """Execute a search and return raw page payloads as :class:`RawScrape` records.

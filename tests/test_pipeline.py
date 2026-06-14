@@ -352,7 +352,10 @@ class TestPipelineScanProducesClosedRun:
 class BlockedScraper(ScrapeProvider):
     """Primary scraper that always raises BlockedError (CAPTCHA/IP block)."""
 
-    source = "airbnb"
+    SOURCE = "airbnb"
+
+    def fallback_url(self, query: SearchQuery):  # noqa: ARG002
+        return "https://www.airbnb.com/s/Lisbon/homes"
 
     def search(self, query: SearchQuery):  # noqa: ARG002
         from scrapers.base import BlockedError
@@ -364,7 +367,10 @@ class EmptyScraper(ScrapeProvider):
     """Primary scraper that silently returns no payloads (the common Airbnb
     datacenter-IP block symptom — no exception, just nothing captured)."""
 
-    source = "airbnb"
+    SOURCE = "airbnb"
+
+    def fallback_url(self, query: SearchQuery):  # noqa: ARG002
+        return "https://www.airbnb.com/s/Lisbon/homes"
 
     def search(self, query: SearchQuery):  # noqa: ARG002
         return []
@@ -375,11 +381,13 @@ class RecordingFallback(ScrapeProvider):
 
     def __init__(self, payload_text: str = "fallback-content") -> None:
         self.calls: list[SearchQuery] = []
+        self.kwargs: list[dict] = []
         self._payload_text = payload_text
 
-    def search(self, query: SearchQuery):
+    def search(self, query: SearchQuery, *, target_url=None, source_label=None):
         self.calls.append(query)
-        return [_make_raw_payload(self._payload_text, source="fallback_brightdata")]
+        self.kwargs.append({"target_url": target_url, "source_label": source_label})
+        return [_make_raw_payload(self._payload_text, source=source_label or "fallback_brightdata")]
 
 
 def _ok_extraction() -> ExtractionResult:
@@ -436,6 +444,70 @@ class TestFallbackAutoEngages:
 
         assert len(fallback.calls) == 1
         assert run.stats["fallback_engaged"] is True
+
+    def test_fallback_is_source_aware(self):
+        """A blocked non-Airbnb source routes its OWN url through the fallback,
+        and the fetched data is attributed to that source."""
+        eng = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
+        Base.metadata.create_all(eng)
+        Session = sessionmaker(bind=eng, autoflush=False, autocommit=False)
+
+        class BlockedVrbo(ScrapeProvider):
+            SOURCE = "vrbo"
+
+            def fallback_url(self, query):  # noqa: ARG002
+                return "https://www.vrbo.com/search?destination=Lisbon"
+
+            def search(self, query):  # noqa: ARG002
+                from scrapers.base import BlockedError
+
+                raise BlockedError(url="https://www.vrbo.com", reason="datadome")
+
+        fallback = RecordingFallback()
+        run_id = _run_pipeline_with_session(
+            eng,
+            query=SearchQuery(area="Lisbon", sources=["vrbo"]),
+            scrapers=[BlockedVrbo()],
+            extractor=FakeExtractor([_ok_extraction()]),
+            fallback=fallback,
+        )
+
+        with Session() as sess:
+            listing = sess.scalars(select(Listing)).first()
+
+        assert fallback.kwargs[0]["source_label"] == "vrbo"
+        assert "vrbo.com" in fallback.kwargs[0]["target_url"]
+        # The fallback-fetched listing is attributed to vrbo, not a fallback marker.
+        assert listing.source == "vrbo"
+
+    def test_no_fallback_url_skips_fallback(self):
+        """A blocked source that can't supply a URL is not routed (no wrong-site fetch)."""
+        eng = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
+        Base.metadata.create_all(eng)
+        Session = sessionmaker(bind=eng, autoflush=False, autocommit=False)
+
+        class BlockedNoUrl(ScrapeProvider):
+            SOURCE = "mystery"
+
+            def search(self, query):  # noqa: ARG002
+                from scrapers.base import BlockedError
+
+                raise BlockedError(url="x", reason="blocked")
+            # inherits fallback_url -> None
+
+        fallback = RecordingFallback()
+        run_id = _run_pipeline_with_session(
+            eng,
+            query=SearchQuery(area="Lisbon", sources=["airbnb"]),
+            scrapers=[BlockedNoUrl()],
+            extractor=FakeExtractor([]),
+            fallback=fallback,
+        )
+        with Session() as sess:
+            run = sess.get(SearchRun, run_id)
+
+        assert fallback.calls == []
+        assert run.stats["fallback_engaged"] is False
 
     def test_not_engaged_when_primary_succeeds(self):
         eng = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
