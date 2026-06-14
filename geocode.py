@@ -24,7 +24,7 @@ def reverse_geocode(
     lon: float,
     *,
     http_client: httpx.Client | None = None,
-    zoom: int = 10,
+    zoom: int = 8,
     lang: str = "en",
 ) -> str | None:
     """Resolve ``(lat, lon)`` to a concise "City, Country" area name, or ``None``.
@@ -37,7 +37,9 @@ def reverse_geocode(
         Optional pre-built :class:`httpx.Client` (inject a mock in tests). A
         short-lived client is created and closed when omitted.
     zoom:
-        Nominatim address-detail level (10 ≈ city). Lower = broader.
+        Nominatim address-detail level. Default 8 ≈ city (e.g. clicking central
+        Tokyo gives "Tokyo, Japan" rather than the "Suginami" ward you get at
+        10). Lower = broader, higher = more granular.
     lang:
         Preferred language for place names (Nominatim ``accept-language``).
         Defaults to English so areas come back as e.g. "Tokyo, Japan" rather

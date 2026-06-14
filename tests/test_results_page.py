@@ -82,19 +82,21 @@ def _populated_df() -> pd.DataFrame:
 class TestResultsPage:
     """Smoke tests for dashboard/pages/results.py::render()."""
 
-    def test_no_run_selected_shows_info(self) -> None:
-        """(a) When last_run_id is absent, render() shows an info message and returns."""
+    def test_no_runs_shows_info(self) -> None:
+        """(a) When there are no runs at all, render() shows an info message and returns."""
         import dashboard.pages.results as results_page
 
         mock_st = _make_mock_st(session_state={})  # no last_run_id key
 
-        with patch.object(results_page, "st", mock_st):
+        with (
+            patch.object(results_page, "st", mock_st),
+            patch("dashboard.pages.results.list_search_runs", return_value=[]),
+        ):
             results_page.render()
 
         mock_st.info.assert_called_once()
         message = mock_st.info.call_args[0][0]
-        # Message should mention that no run has been selected.
-        assert "no run selected" in message.lower() or "search" in message.lower()
+        assert "no search runs" in message.lower() or "search" in message.lower()
 
     def test_empty_dataframe_shows_info(self) -> None:
         """(b) When load_run_df returns an empty DataFrame, an info message is shown."""
@@ -105,6 +107,10 @@ class TestResultsPage:
 
         with (
             patch.object(results_page, "st", mock_st),
+            patch(
+                "dashboard.pages.results.list_search_runs",
+                return_value=[{"id": 1, "area_query": "Lisbon", "stats": {}}],
+            ),
             patch("dashboard.pages.results.load_run_df", return_value=empty_df),
         ):
             results_page.render()
@@ -122,6 +128,10 @@ class TestResultsPage:
 
         with (
             patch.object(results_page, "st", mock_st),
+            patch(
+                "dashboard.pages.results.list_search_runs",
+                return_value=[{"id": 42, "area_query": "Lisbon", "stats": {"listing_count": 2}}],
+            ),
             patch("dashboard.pages.results.load_run_df", return_value=df),
             patch("dashboard.pages.results.filter_df", return_value=df),
             patch("dashboard.pages.results.render_map") as mock_map,

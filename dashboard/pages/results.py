@@ -22,7 +22,7 @@ from dashboard.components.results_table import DISPLAY_COLUMNS, filter_df, load_
 from dashboard.components.map_view import render_map  # noqa: E402
 from dashboard.components.charts import render_price_histogram, render_source_comparison  # noqa: E402
 from dashboard.components.detail_panel import render_detail_panel  # noqa: E402
-from db.repo import get_engine as _get_engine  # noqa: E402
+from db.repo import get_engine as _get_engine, list_search_runs  # noqa: E402
 from sqlalchemy.orm import sessionmaker as _sessionmaker  # noqa: E402
 
 
@@ -35,10 +35,33 @@ def _get_cached_engine():
 def render() -> None:
     st.title("📋 Results")
 
-    run_id = st.session_state.get("last_run_id")
-    if run_id is None:
-        st.info("No search run selected yet.  Go to **Search** and run a query first.")
+    # Pick which run to view. Defaults to this session's last run, otherwise the
+    # most recent run — so the page is useful on its own and across reloads, not
+    # just immediately after a search.
+    runs = list_search_runs(limit=50, engine=_get_cached_engine())
+    if not runs:
+        st.info("No search runs yet.  Go to **Search** and run a query first.")
         return
+
+    run_ids = [r["id"] for r in runs]
+
+    def _label(rid: int) -> str:
+        meta = next((r for r in runs if r["id"] == rid), None)
+        if not meta:
+            return f"Run {rid}"
+        stats = meta.get("stats") or {}
+        n = stats.get("listing_count", stats.get("total_listings", 0))
+        return f"Run {rid} — {meta.get('area_query', '?')} ({n} listings)"
+
+    default_id = st.session_state.get("last_run_id")
+    default_idx = run_ids.index(default_id) if default_id in run_ids else 0
+
+    run_id = st.selectbox(
+        "Search run",
+        options=run_ids,
+        index=default_idx,
+        format_func=_label,
+    )
 
     st.write(f"Showing results for **Run ID: {run_id}**.")
 
